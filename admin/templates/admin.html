@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{.Title}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
+            background: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+        }
+        .header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            color: #58a6ff;
+        }
+        .logout-btn {
+            background: #da3633;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: inherit;
+        }
+        .logout-btn:hover {
+            background: #b62324;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        .section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .section h2 {
+            color: #58a6ff;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .btn {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .btn:hover {
+            background: #2ea043;
+        }
+        .btn-danger {
+            background: #da3633;
+        }
+        .btn-danger:hover {
+            background: #b62324;
+        }
+        .script-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .script-item {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .script-item h3 {
+            color: #7ee787;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .script-item p {
+            color: #8b949e;
+            margin-bottom: 15px;
+        }
+        .script-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #f0f6fc;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        .form-group textarea {
+            min-height: 200px;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+        }
+        .modal-content {
+            background: #161b22;
+            margin: 5% auto;
+            padding: 30px;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .close {
+            color: #8b949e;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .close:hover {
+            color: #c9d1d9;
+        }
+        .emoji {
+            margin-right: 8px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .status.success {
+            background: rgba(35, 134, 54, 0.2);
+            border: 1px solid rgba(35, 134, 54, 0.5);
+            color: #238636;
+        }
+        .status.error {
+            background: rgba(248, 81, 73, 0.2);
+            border: 1px solid rgba(248, 81, 73, 0.5);
+            color: #f85149;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><span class="emoji">⚙️</span>Script Server Admin</h1>
+        <form method="POST" action="/logout" style="margin: 0;">
+            <button type="submit" class="logout-btn">Logout</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <div id="status" class="status"></div>
+
+        <!-- Scripts Management -->
+        <div class="section">
+            <h2><span class="emoji">📜</span>Scripts Management</h2>
+            <button class="btn" onclick="openCreateModal()">Add New Script</button>
+            <button class="btn" onclick="updateIndexPage()">Update Index Page</button>
+            
+            <div id="scriptsList" class="script-list">
+                <!-- Scripts will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit Script Modal -->
+    <div id="scriptModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Add New Script</h2>
+            
+            <form id="scriptForm">
+                <div class="form-group">
+                    <label for="scriptName">Script Name (URL path)</label>
+                    <input type="text" id="scriptName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="scriptDescription">Description</label>
+                    <input type="text" id="scriptDescription" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="scriptIcon">Icon (emoji)</label>
+                    <input type="text" id="scriptIcon" value="📜">
+                </div>
+                
+                <div class="form-group">
+                    <label for="scriptType">Type</label>
+                    <select id="scriptType" onchange="toggleRedirectField()">
+                        <option value="local">Local Script</option>
+                        <option value="redirect">Redirect to URL</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="redirectGroup" style="display: none;">
+                    <label for="redirectUrl">Redirect URL</label>
+                    <input type="url" id="redirectUrl">
+                </div>
+                
+                <button type="submit" class="btn">Save Script</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Script Content Modal -->
+    <div id="contentModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="contentModalTitle">Edit Script Content</h2>
+            
+            <form id="contentForm">
+                <div class="form-group">
+                    <label for="scriptContent">Script Content</label>
+                    <textarea id="scriptContent" placeholder="#!/bin/bash&#10;&#10;echo 'Hello World!'"></textarea>
+                </div>
+                
+                <button type="submit" class="btn">Save Content</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let editingScript = null;
+        let editingContent = null;
+
+        // Load scripts on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadScripts();
+        });
+
+        function showStatus(message, type = 'success') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+
+        async function loadScripts() {
+            try {
+                const response = await fetch('/admin/scripts');
+                const scripts = await response.json();
+                
+                const container = document.getElementById('scriptsList');
+                container.innerHTML = '';
+                
+                scripts.forEach(script => {
+                    const scriptDiv = document.createElement('div');
+                    scriptDiv.className = 'script-item';
+                    scriptDiv.innerHTML = `
+                        <h3>${script.icon} ${script.name}</h3>
+                        <p>${script.description}</p>
+                        <p><strong>Type:</strong> ${script.type}</p>
+                        ${script.redirect_url ? `<p><strong>Redirects to:</strong> ${script.redirect_url}</p>` : ''}
+                        <div class="script-actions">
+                            <button class="btn" onclick="editScript('${script.name}')">Edit</button>
+                            ${script.type === 'local' ? `<button class="btn" onclick="editContent('${script.name}')">Edit Content</button>` : ''}
+                            <button class="btn btn-danger" onclick="deleteScript('${script.name}')">Delete</button>
+                        </div>
+                    `;
+                    container.appendChild(scriptDiv);
+                });
+            } catch (error) {
+                showStatus('Failed to load scripts', 'error');
+            }
+        }
+
+        function openCreateModal() {
+            editingScript = null;
+            document.getElementById('modalTitle').textContent = 'Add New Script';
+            document.getElementById('scriptForm').reset();
+            document.getElementById('scriptModal').style.display = 'block';
+        }
+
+        function editScript(name) {
+            // Find the script in the loaded data
+            fetch('/admin/scripts')
+                .then(response => response.json())
+                .then(scripts => {
+                    const script = scripts.find(s => s.name === name);
+                    if (script) {
+                        editingScript = name;
+                        document.getElementById('modalTitle').textContent = 'Edit Script';
+                        document.getElementById('scriptName').value = script.name;
+                        document.getElementById('scriptName').disabled = true;
+                        document.getElementById('scriptDescription').value = script.description;
+                        document.getElementById('scriptIcon').value = script.icon;
+                        document.getElementById('scriptType').value = script.type;
+                        document.getElementById('redirectUrl').value = script.redirect_url || '';
+                        toggleRedirectField();
+                        document.getElementById('scriptModal').style.display = 'block';
+                    }
+                });
+        }
+
+        function editContent(name) {
+            editingContent = name;
+            document.getElementById('contentModalTitle').textContent = `Edit Content: ${name}`;
+            
+            fetch(`/admin/scripts/${name}/content`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('scriptContent').value = data.content;
+                    document.getElementById('contentModal').style.display = 'block';
+                })
+                .catch(error => {
+                    showStatus('Failed to load script content', 'error');
+                });
+        }
+
+        async function deleteScript(name) {
+            if (!confirm(`Are you sure you want to delete the script "${name}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/admin/scripts/${name}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showStatus('Script deleted successfully');
+                    loadScripts();
+                } else {
+                    showStatus('Failed to delete script', 'error');
+                }
+            } catch (error) {
+                showStatus('Failed to delete script', 'error');
+            }
+        }
+
+        function toggleRedirectField() {
+            const type = document.getElementById('scriptType').value;
+            const redirectGroup = document.getElementById('redirectGroup');
+            redirectGroup.style.display = type === 'redirect' ? 'block' : 'none';
+        }
+
+        function closeModal() {
+            document.getElementById('scriptModal').style.display = 'none';
+            document.getElementById('contentModal').style.display = 'none';
+            document.getElementById('scriptName').disabled = false;
+            editingScript = null;
+            editingContent = null;
+        }
+
+        // Handle script form submission
+        document.getElementById('scriptForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('scriptName').value,
+                description: document.getElementById('scriptDescription').value,
+                icon: document.getElementById('scriptIcon').value,
+                type: document.getElementById('scriptType').value,
+                redirect_url: document.getElementById('redirectUrl').value
+            };
+
+            try {
+                let response;
+                if (editingScript) {
+                    response = await fetch(`/admin/scripts/${editingScript}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                } else {
+                    response = await fetch('/admin/scripts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                }
+
+                if (response.ok) {
+                    showStatus(editingScript ? 'Script updated successfully' : 'Script created successfully');
+                    closeModal();
+                    loadScripts();
+                } else {
+                    const error = await response.json();
+                    showStatus(error.error || 'Failed to save script', 'error');
+                }
+            } catch (error) {
+                showStatus('Failed to save script', 'error');
+            }
+        });
+
+        // Handle content form submission
+        document.getElementById('contentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!editingContent) return;
+
+            const content = document.getElementById('scriptContent').value;
+
+            try {
+                const response = await fetch(`/admin/scripts/${editingContent}/content`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+
+                if (response.ok) {
+                    showStatus('Script content updated successfully');
+                    closeModal();
+                } else {
+                    showStatus('Failed to update script content', 'error');
+                }
+            } catch (error) {
+                showStatus('Failed to update script content', 'error');
+            }
+        });
+
+        async function updateIndexPage() {
+            try {
+                const response = await fetch('/admin/scripts');
+                const scripts = await response.json();
+                
+                const updateResponse = await fetch('/admin/index-page', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scripts })
+                });
+
+                if (updateResponse.ok) {
+                    showStatus('Index page updated successfully');
+                } else {
+                    showStatus('Failed to update index page', 'error');
+                }
+            } catch (error) {
+                showStatus('Failed to update index page', 'error');
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const scriptModal = document.getElementById('scriptModal');
+            const contentModal = document.getElementById('contentModal');
+            if (event.target === scriptModal || event.target === contentModal) {
+                closeModal();
+            }
+        };
+    </script>
+</body>
+</html>

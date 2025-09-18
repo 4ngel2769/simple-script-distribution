@@ -1,0 +1,68 @@
+# No HTTPS needed since Cloudflare handles it
+{
+	auto_https off
+	admin 0.0.0.0:2019
+}
+
+:80 {
+	root * /var/www/scripts
+	
+	# Admin dashboard routing (must come first)
+	handle /admin* {
+		reverse_proxy admin-dashboard:8080
+	}
+	
+	# Health check
+	handle /health {
+		header Content-Type "text/plain"
+		respond "OK"
+	}
+	
+	# Special case: redirect rpi_oled_setup to GitHub
+	handle /rpi_oled_setup {
+		redir https://raw.githubusercontent.com/4ngel2769/rpi_oled_stats/main/autoinstall_oled_stats.sh 302
+	}
+	
+	# Handle other script requests with clean URLs
+	@script_request {
+		path_regexp script ^/([^/]+)/?$
+	}
+	
+	# Try multiple file patterns for flexibility
+	handle @script_request {
+		try_files {re.script.1} {re.script.1}/{re.script.1}.sh {re.script.1}/runme_{re.script.1}install.sh {re.script.1}/runme_{re.script.1}.sh {re.script.1}.sh
+		
+		header Content-Type "text/plain; charset=utf-8"
+		header Cache-Control "no-cache, must-revalidate"
+		header X-Content-Type-Options "nosniff"
+		
+		file_server
+	}
+	
+	# Root page - serve static HTML
+	handle / {
+		try_files index.html
+		file_server
+	}
+	
+	# Hide sensitive files
+	@hidden {
+		path */.*
+		path */.backups/*
+	}
+	handle @hidden {
+		respond "Not Found" 404
+	}
+	
+	# Fallback 404
+	handle {
+		header Content-Type "text/plain"
+		respond "Script not found" 404
+	}
+	
+	# Logging
+	log {
+		output stdout
+		format console
+	}
+}

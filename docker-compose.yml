@@ -1,0 +1,40 @@
+services:
+  script-server:
+    image: caddy:alpine
+    container_name: script-server
+    restart: unless-stopped
+    ports:
+      - "2020:80"
+    volumes:
+      - /var/www/scripts:/srv/scripts:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - CADDY_ADMIN=0.0.0.0:2019
+    labels:
+      - "com.docker.compose.project=script-server"
+    depends_on:
+      - admin-dashboard
+
+  admin-dashboard:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: script-admin
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/www/scripts:/app/scripts
+      - ./admin/config.yaml:/app/config.yaml:ro
+    environment:
+      - PORT=8080
+      - SCRIPTS_PATH=/app/scripts
+      - CONFIG_PATH=/app/config.yaml
+    labels:
+      - "com.docker.compose.project=script-server"
+
+volumes:
+  caddy_data:
+  caddy_config:
