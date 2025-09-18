@@ -11,12 +11,12 @@
 ### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/yourusername/script-distribution-server.git
-cd script-distribution-server
+git clone https://github.com/4ngel2769/simple-script-distribution.git
+cd simple-script-distribution
 
 # Copy configuration templates
 cp .env.example .env
-cp admin/config.yaml.example admin/config.yaml
+cp admin/example.config.yaml admin/config.yaml
 ```
 
 ### 2. Configure Environment
@@ -47,13 +47,13 @@ admin:
 
 ```bash
 # Build and start
-docker compose up --build -d
+sudo docker compose up --build -d
 
 # Check status
-docker compose ps
+sudo docker compose ps
 
 # View logs
-docker compose logs -f
+sudo docker compose logs -f
 ```
 
 ### 5. Initial Setup
@@ -175,19 +175,19 @@ netstat -tlnp | grep 8080
 ls -la /var/www/scripts/
 
 # Check file permissions
-docker compose exec script-server ls -la /srv/scripts/
+sudo docker compose exec script-server ls -la /srv/scripts/
 
 # Recreate containers
-docker compose down && docker compose up -d
+sudo docker compose down && sudo docker compose up -d
 ```
 
 **Caddy config errors:**
 ```bash
 # Validate Caddyfile syntax
-docker compose exec script-server caddy validate --config /etc/caddy/Caddyfile
+sudo docker compose exec script-server caddy validate --config /etc/caddy/Caddyfile
 
 # Reload Caddy config
-docker compose exec script-server caddy reload --config /etc/caddy/Caddyfile
+sudo docker compose exec script-server caddy reload --config /etc/caddy/Caddyfile
 ```
 
 ### Performance Tuning
@@ -221,7 +221,7 @@ cp admin/config.yaml admin/config.yaml.backup
 ### Restore
 ```bash
 # Stop services
-docker compose down
+sudo docker compose down
 
 # Restore scripts
 tar -xzf scripts-backup-YYYYMMDD.tar.gz -C /
@@ -230,7 +230,7 @@ tar -xzf scripts-backup-YYYYMMDD.tar.gz -C /
 cp admin/config.yaml.backup admin/config.yaml
 
 # Restart
-docker compose up -d
+sudo docker compose up -d
 ```
 
 ## Security Considerations
@@ -246,4 +246,4 @@ docker compose up -d
 
 - [API Documentation](API.md) - Learn about the admin API
 - [Deployment Guide](DEPLOYMENT.md) - Advanced deployment scenarios
-- Check the [GitHub Issues](https://github.com/yourusername/script-distribution-server/issues) for known issues
+- Check the [GitHub Issues](https://github.com/4ngel2769/simple-script-distribution/issues) for known issues

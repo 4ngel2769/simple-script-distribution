@@ -1,17 +1,16 @@
 # Script Distribution Server
 
-A lightweight, self-hosted script distribution server with web-based admin dashboard. Inspired by popular one-liner installations like Pi-hole and CasaOS.
+A lightweight, self-hosted script distribution server with web-based admin dashboard. Inspired by popular one-liner installations like Pi-hole, CasaOS, and Docker.
 
 ## Features
 
 🚀 **Clean One-Liner Installation URLs**
 - `curl -fsSL https://get.yourdomain.com/script | sudo bash`
-- Pi-hole style simplicity
 
 ⚙️ **Web Admin Dashboard**
 - Create, edit, and delete scripts through a web interface
 - Real-time script content editor
-- Manage redirects to external scripts (GitHub, etc.)
+- Manage redirects to external scripts (hosted on GitHub, etc.)
 
 🐳 **Docker-First Design**
 - Easy deployment with Docker Compose
@@ -27,14 +26,14 @@ A lightweight, self-hosted script distribution server with web-based admin dashb
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/script-distribution-server.git
-   cd script-distribution-server
+   git clone https://github.com/4ngel2769/simple-script-distribution.git
+   cd simple-script-distribution
    ```
 
 2. **Configure environment:**
    ```bash
    cp .env.example .env
-   cp admin/config.yaml.example admin/config.yaml
+   cp admin/example.config.yaml admin/config.yaml
    # Edit both files with your settings
    ```
 
@@ -47,7 +46,7 @@ A lightweight, self-hosted script distribution server with web-based admin dashb
 
 4. **Start the server:**
    ```bash
-   docker compose up -d
+   sudo docker compose up -d
    ```
 
 5. **Access admin dashboard:**
@@ -59,10 +58,10 @@ A lightweight, self-hosted script distribution server with web-based admin dashb
 ### For Script Users
 ```bash
 # Download and execute a script
-curl -fsSL https://get.yourdomain.com/tor | sudo bash
+curl -fsSL https://get.yourdomain.com/script.sh | bash
 
 # Just download
-curl -O https://get.yourdomain.com/docker
+curl -O https://get.yourdomain.com/script.sh
 
 # View available scripts
 curl https://get.yourdomain.com/
@@ -79,7 +78,7 @@ curl https://get.yourdomain.com/
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │                 │    │                  │    │                 │
-│   Users         │───▶│   Caddy Server   │───▶│   Admin Panel   │
+│   Users         │───>│   Caddy Server   │───>│   Admin Panel   │
 │                 │    │   (Port 80)      │    │   (Port 8080)   │
 │                 │    │                  │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
