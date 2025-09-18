@@ -365,14 +365,129 @@ func generateIndexHTML(scripts []ScriptConfig) string {
 `, script.Name, script.Icon, script.Name, script.Description))
 	}
 
-	// Return the full HTML with updated script elements
-	// This is a simplified version - in practice you might want to use templates
+	// Return the complete HTML template with all styling and JavaScript
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
     <title>Script Server</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Include the full CSS and JS from the original file -->
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 40px;
+            background: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #58a6ff;
+            border-bottom: 2px solid #21262d;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        .endpoint {
+            display: block;
+            color: #7ee787;
+            text-decoration: none;
+            padding: 15px 20px;
+            margin: 10px 0;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            background: #161b22;
+            transition: all 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+        .endpoint:hover {
+            background: #21262d;
+            border-color: #58a6ff;
+            transform: translateX(5px);
+        }
+        .endpoint.copied {
+            background: #238636;
+            border-color: #238636;
+        }
+        .copy-feedback {
+            position: absolute;
+            right: 20px;
+            top: 50%%;
+            transform: translateY(-50%%);
+            background: #238636;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .copy-feedback.show {
+            opacity: 1;
+        }
+        .usage {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .usage h3 {
+            color: #ffa657;
+            margin-top: 0;
+        }
+        code {
+            background: #21262d;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #f0f6fc;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        code:hover {
+            background: #30363d;
+        }
+        .health {
+            color: #8b949e;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #21262d;
+        }
+        .health .endpoint {
+            display: inline-block;
+            margin: 0;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        .emoji { 
+            margin-right: 8px; 
+        }
+        .click-hint {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 5px;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #238636;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            opacity: 0;
+            transform: translateY(100px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -381,8 +496,107 @@ func generateIndexHTML(scripts []ScriptConfig) string {
         <div class="click-hint">💡 Click any endpoint to copy the curl command to clipboard</div>
         
 %s
-        <!-- Rest of the HTML content -->
+        <div class="usage">
+            <h3><span class="emoji">📖</span>Usage Examples</h3>
+            <p>Direct download:</p>
+            <p><code onclick="copyToClipboard('curl https://' + window.location.host + '/tor')">curl https://' + window.location.host + '/tor</code></p>
+            <p>Download and execute:</p>
+            <p><code onclick="copyToClipboard('curl -fsSL https://' + window.location.host + '/tor | sudo bash')">curl -fsSL https://' + window.location.host + '/tor | sudo bash</code></p>
+            <p>Save to file:</p>
+            <p><code onclick="copyToClipboard('curl -o install-script.sh https://' + window.location.host + '/tor')">curl -o install-script.sh https://' + window.location.host + '/tor</code></p>
+        </div>
+        
+        <div class="health">
+            <p><span class="emoji">🔗</span>Health check: 
+                <span class="endpoint" onclick="copyToClipboard('curl https://' + window.location.host + '/health')">/health</span>
+            </p>
+        </div>
     </div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast">
+        Command copied to clipboard!
+    </div>
+
+    <script>
+        // Get the current domain dynamically
+        const currentDomain = window.location.origin;
+        
+        // Add click listeners to all script endpoints
+        document.querySelectorAll('.endpoint[data-script]').forEach(endpoint => {
+            endpoint.addEventListener('click', function(e) {
+                e.preventDefault();
+                const script = this.dataset.script;
+                const command = 'curl -fsSL ' + currentDomain + '/' + script + ' | sudo bash';
+                
+                copyToClipboard(command);
+                showFeedback(this);
+            });
+        });
+
+        function copyToClipboard(text) {
+            // Try the modern clipboard API first
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast();
+                }).catch(() => {
+                    fallbackCopyToClipboard(text);
+                });
+            } else {
+                // Fallback for older browsers or non-HTTPS
+                fallbackCopyToClipboard(text);
+            }
+        }
+
+        function fallbackCopyToClipboard(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast();
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                // Show a prompt as last resort
+                prompt('Copy this command:', text);
+            }
+            
+            textArea.remove();
+        }
+
+        function showFeedback(element) {
+            const feedback = element.querySelector('.copy-feedback');
+            element.classList.add('copied');
+            feedback.classList.add('show');
+            
+            setTimeout(() => {
+                element.classList.remove('copied');
+                feedback.classList.remove('show');
+            }, 1000);
+        }
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        // Add click listener to code examples
+        document.querySelectorAll('code[onclick]').forEach(code => {
+            code.addEventListener('click', function() {
+                showToast();
+            });
+        });
+    </script>
 </body>
 </html>`, scriptElements.String())
 }
