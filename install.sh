@@ -332,5 +332,5 @@ main() {
     echo "  Restart services: sudo docker compose restart"
 }
 
-# # Run main function
-# main "$@"
+# Run main function
+main "$@"
