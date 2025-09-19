@@ -322,7 +322,7 @@
                     return response.json();
                 })
                 .then(function(scripts) {
-                    console.log('Loaded scripts:', scripts); // Debug log
+                    console.log('Loaded scripts:', scripts);
                     var container = document.getElementById('scriptsList');
                     container.innerHTML = '';
                     
@@ -335,19 +335,17 @@
                         var scriptDiv = document.createElement('div');
                         scriptDiv.className = 'script-item';
                         
-                        // Handle different property names and provide defaults
                         var icon = script.icon || '📜';
                         var name = script.name || 'Unnamed';
                         var description = script.description || 'No description';
                         var type = script.type || 'local';
                         var redirectInfo = '';
                         
-                        console.log('Processing script:', script); // Debug log
-                        
                         if (script.redirect_url) {
                             redirectInfo = '<p><strong>Redirects to:</strong> <a href="' + script.redirect_url + '" target="_blank" style="color: #58a6ff;">' + script.redirect_url + '</a></p>';
                         }
                         
+                        // Only show "Edit Content" for local scripts
                         var editContentButton = '';
                         if (type === 'local') {
                             editContentButton = '<button class="btn" onclick="editContent(\'' + name + '\')">Edit Content</button>';
@@ -378,12 +376,15 @@
             document.getElementById('scriptForm').reset();
             document.getElementById('scriptIcon').value = '📜';
             document.getElementById('scriptName').disabled = false;
+            document.getElementById('scriptType').value = 'local';
+            document.getElementById('scriptPath').value = '';
+            document.getElementById('redirectUrl').value = '';
             toggleScriptTypeFields();
             document.getElementById('scriptModal').style.display = 'block';
         }
 
         function editScript(name) {
-            console.log('Editing script:', name); // Debug log
+            console.log('Editing script:', name);
             fetch('/admin/scripts')
                 .then(function(response) {
                     return response.json();
@@ -397,13 +398,11 @@
                         }
                     }
                     
-                    console.log('Found script for editing:', script); // Debug log
-                    
                     if (script) {
                         editingScript = name;
                         document.getElementById('modalTitle').textContent = 'Edit Script';
                         document.getElementById('scriptName').value = script.name || '';
-                        document.getElementById('scriptName').disabled = true;
+                        document.getElementById('scriptName').disabled = true; // Don't allow name changes when editing
                         document.getElementById('scriptDescription').value = script.description || '';
                         document.getElementById('scriptIcon').value = script.icon || '📜';
                         document.getElementById('scriptType').value = script.type || 'local';
@@ -422,7 +421,7 @@
         }
 
         function editContent(name) {
-            console.log('Editing content for:', name); // Debug log
+            console.log('Editing content for:', name);
             editingContent = name;
             document.getElementById('contentModalTitle').textContent = 'Edit Content: ' + name;
             
@@ -441,7 +440,7 @@
         }
 
         function deleteScript(name) {
-            console.log('Deleting script:', name); // Debug log
+            console.log('Deleting script:', name);
             
             if (!name || name === 'Unnamed') {
                 showStatus('Cannot delete script with invalid name', 'error');
@@ -456,12 +455,11 @@
                 method: 'DELETE'
             })
             .then(function(response) {
-                console.log('Delete response:', response); // Debug log
                 if (response.ok) {
                     showStatus('Script deleted successfully');
                     loadScripts();
                 } else {
-                    response.json().then(function(error) {
+                    return response.json().then(function(error) {
                         showStatus(error.error || 'Failed to delete script', 'error');
                     });
                 }
@@ -470,16 +468,6 @@
                 console.error('Delete error:', error);
                 showStatus('Failed to delete script', 'error');
             });
-        }
-
-        function openCreateModal() {
-            editingScript = null;
-            document.getElementById('modalTitle').textContent = 'Add New Script';
-            document.getElementById('scriptForm').reset();
-            document.getElementById('scriptIcon').value = '📜';
-            document.getElementById('scriptName').disabled = false;
-            toggleScriptTypeFields();
-            document.getElementById('scriptModal').style.display = 'block';
         }
 
         function toggleScriptTypeFields() {
@@ -547,7 +535,8 @@
 
         function selectFile(path, name) {
             document.getElementById('scriptPath').value = path;
-            closeModal();
+            // Close ONLY the file browser modal, not the main script modal
+            document.getElementById('fileBrowserModal').style.display = 'none';
             showStatus('Selected file: ' + name, 'success');
         }
 
@@ -596,19 +585,26 @@
                 type: type
             };
             
+            console.log('Form data before submission:', formData); 
+            
             if (type === 'redirect') {
                 formData.redirect_url = document.getElementById('redirectUrl').value;
                 if (!formData.redirect_url) {
                     showStatus('Redirect URL is required for redirect type scripts', 'error');
                     return;
                 }
+                console.log('Adding redirect_url:', formData.redirect_url); 
             } else if (type === 'local') {
                 var scriptPath = document.getElementById('scriptPath').value;
-                formData.script_path = scriptPath;
+                if (scriptPath) {
+                    formData.script_path = scriptPath;
+                }
             }
 
             var method = editingScript ? 'PUT' : 'POST';
-            var url = editingScript ? '/admin/scripts/' + editingScript : '/admin/scripts';
+            var url = editingScript ? '/admin/scripts/' + encodeURIComponent(editingScript) : '/admin/scripts';
+
+            console.log('Submitting:', method, url, formData); 
 
             fetch(url, {
                 method: method,
@@ -616,11 +612,13 @@
                 body: JSON.stringify(formData)
             })
             .then(function(response) {
+                console.log('Response status:', response.status); 
                 return response.json().then(function(data) {
-                    return { ok: response.ok, data: data };
+                    return { ok: response.ok, status: response.status, data: data };
                 });
             })
             .then(function(result) {
+                console.log('Response result:', result); 
                 if (result.ok) {
                     showStatus(editingScript ? 'Script updated successfully' : 'Script created successfully');
                     closeModal();
@@ -630,6 +628,7 @@
                 }
             })
             .catch(function(error) {
+                console.error('Submit error:', error);
                 showStatus('Failed to save script', 'error');
             });
         });
@@ -642,7 +641,7 @@
 
             var content = document.getElementById('scriptContent').value;
 
-            fetch('/admin/scripts/' + editingContent + '/content', {
+            fetch('/admin/scripts/' + encodeURIComponent(editingContent) + '/content', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: content })

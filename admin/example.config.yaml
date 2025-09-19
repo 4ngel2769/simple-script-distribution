@@ -7,31 +7,7 @@ admin:
   password_hash: "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"
 
 # Initial script configuration
-scripts:
-  - name: tor
-    path: tor
-    description: "Tor installation script"
-    icon: "🧅"
-    type: local
-  
-  - name: rpi_oled_setup
-    path: rpi_oled_setup
-    description: "Raspberry Pi OLED status installation script"
-    icon: "📟"
-    type: redirect
-    redirect_url: "https://raw.githubusercontent.com/4ngel2769/rpi_oled_stats/main/autoinstall_oled_stats.sh"
-  
-  - name: docker
-    path: docker
-    description: "Docker installation script"
-    icon: "🐳"
-    type: local
-  
-  - name: server_setup
-    path: server_setup
-    description: "Server setup script"
-    icon: "⚙️"
-    type: local
+scripts: []
 
 # Script types:
 # - local: Script file stored on this server
