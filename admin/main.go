@@ -201,9 +201,25 @@ func createScriptAPI(c *fiber.Ctx) error {
 
     log.Printf("Received script data: %+v", script)
 
-    // Validate required fields
-    if script.Name == "" || script.Description == "" {
-        return c.Status(400).JSON(fiber.Map{"error": "Name and description are required"})
+    // Validate required fields FIRST
+    if script.Name == "" {
+        return c.Status(400).JSON(fiber.Map{"error": "Script name is required"})
+    }
+    if script.Description == "" {
+        return c.Status(400).JSON(fiber.Map{"error": "Description is required"})
+    }
+
+    // Validate redirect URL for redirect type BEFORE any other processing
+    if script.Type == "redirect" {
+        log.Printf("Validating redirect URL: %s", script.RedirectURL)
+        if script.RedirectURL == "" {
+            return c.Status(400).JSON(fiber.Map{"error": "Redirect URL is required for redirect type scripts"})
+        }
+        // Validate URL format
+        if !strings.HasPrefix(script.RedirectURL, "http://") && !strings.HasPrefix(script.RedirectURL, "https://") {
+            return c.Status(400).JSON(fiber.Map{"error": "Redirect URL must start with http:// or https://"})
+        }
+        log.Printf("Redirect URL validation passed: %s", script.RedirectURL)
     }
 
     // Store original name for logging
@@ -213,6 +229,13 @@ func createScriptAPI(c *fiber.Ctx) error {
     script.Name = strings.ToLower(strings.ReplaceAll(script.Name, " ", "_"))
     script.Name = strings.ReplaceAll(script.Name, "-", "_")
     script.Name = strings.ReplaceAll(script.Name, ".", "_")
+
+    // Remove any special characters that could cause issues
+    script.Name = strings.ReplaceAll(script.Name, "(", "")
+    script.Name = strings.ReplaceAll(script.Name, ")", "")
+    script.Name = strings.ReplaceAll(script.Name, "&", "and")
+
+    log.Printf("Sanitized script name: %s", script.Name)
 
     // Check if script already exists
     for _, existing := range config.Scripts {
@@ -234,23 +257,13 @@ func createScriptAPI(c *fiber.Ctx) error {
         script.Path = script.Name
     }
 
-    // Validate based on type
-    if script.Type == "redirect" {
-        if script.RedirectURL == "" {
-            return c.Status(400).JSON(fiber.Map{"error": "Redirect URL is required for redirect type scripts"})
-        }
-        // Validate URL format
-        if !strings.HasPrefix(script.RedirectURL, "http://") && !strings.HasPrefix(script.RedirectURL, "https://") {
-            return c.Status(400).JSON(fiber.Map{"error": "Redirect URL must start with http:// or https://"})
-        }
-    }
-
-    log.Printf("Processing script: %+v", script)
+    log.Printf("Final script config before processing: %+v", script)
 
     // Handle script creation based on type
     if script.Type == "local" {
         // Create symlink path
         symlinkPath := filepath.Join(scriptsPath, script.Name)
+        log.Printf("Creating local script with symlink path: %s", symlinkPath)
 
         if script.ScriptPath != "" {
             // User selected existing file - create symlink
@@ -270,6 +283,7 @@ func createScriptAPI(c *fiber.Ctx) error {
                 script.Description, time.Now().Format("2006-01-02 15:04:05"), originalName)
 
             if err := os.WriteFile(scriptFile, []byte(defaultContent), 0755); err != nil {
+                log.Printf("Failed to create script file: %v", err)
                 return c.Status(500).JSON(fiber.Map{"error": "Failed to create script file"})
             }
 
@@ -284,12 +298,13 @@ func createScriptAPI(c *fiber.Ctx) error {
             log.Printf("Created new script and symlink: %s -> %s", symlinkPath, scriptFile)
         }
     } else if script.Type == "redirect" {
+        log.Printf("Processing redirect script: %s -> %s", script.Name, script.RedirectURL)
         // Update Caddyfile for redirect
         if err := updateCaddyfileRedirect(script.Name, script.RedirectURL); err != nil {
             log.Printf("Failed to update Caddyfile: %v", err)
-            return c.Status(500).JSON(fiber.Map{"error": "Failed to configure redirect"})
+            return c.Status(500).JSON(fiber.Map{"error": fmt.Sprintf("Failed to configure redirect: %v", err)})
         }
-        log.Printf("Added redirect for %s -> %s", script.Name, script.RedirectURL)
+        log.Printf("Successfully added redirect for %s -> %s", script.Name, script.RedirectURL)
     }
 
     // Add to config AFTER successful creation
@@ -304,6 +319,7 @@ func createScriptAPI(c *fiber.Ctx) error {
     // Auto-update index page
     if err := updateIndexPageWithCurrentScripts(); err != nil {
         log.Printf("Failed to update index page: %v", err)
+        // Don't fail the request for index page update issues
     }
 
     return c.JSON(script)

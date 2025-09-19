@@ -579,57 +579,88 @@
             
             var type = document.getElementById('scriptType').value;
             var formData = {
-                name: document.getElementById('scriptName').value,
-                description: document.getElementById('scriptDescription').value,
-                icon: document.getElementById('scriptIcon').value,
+                name: document.getElementById('scriptName').value.trim(),
+                description: document.getElementById('scriptDescription').value.trim(),
+                icon: document.getElementById('scriptIcon').value.trim(),
                 type: type
             };
             
-            console.log('Form data before submission:', formData); 
+            // Validate required fields on frontend first
+            if (!formData.name) {
+                showStatus('Script name is required', 'error');
+                return;
+            }
+            if (!formData.description) {
+                showStatus('Description is required', 'error');
+                return;
+            }
+            
+            console.log('Form data before type-specific fields:', formData);
             
             if (type === 'redirect') {
-                formData.redirect_url = document.getElementById('redirectUrl').value;
-                if (!formData.redirect_url) {
+                var redirectUrl = document.getElementById('redirectUrl').value.trim();
+                if (!redirectUrl) {
                     showStatus('Redirect URL is required for redirect type scripts', 'error');
                     return;
                 }
-                console.log('Adding redirect_url:', formData.redirect_url); 
+                formData.redirect_url = redirectUrl;
+                console.log('Added redirect_url:', formData.redirect_url);
             } else if (type === 'local') {
-                var scriptPath = document.getElementById('scriptPath').value;
+                var scriptPath = document.getElementById('scriptPath').value.trim();
                 if (scriptPath) {
                     formData.script_path = scriptPath;
+                    console.log('Added script_path:', formData.script_path);
                 }
             }
 
             var method = editingScript ? 'PUT' : 'POST';
             var url = editingScript ? '/admin/scripts/' + encodeURIComponent(editingScript) : '/admin/scripts';
 
-            console.log('Submitting:', method, url, formData); 
+            console.log('Final form data before submission:', formData);
+            console.log('Submitting:', method, url);
 
             fetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify(formData)
             })
             .then(function(response) {
-                console.log('Response status:', response.status); 
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
                 return response.json().then(function(data) {
-                    return { ok: response.ok, status: response.status, data: data };
+                    return { 
+                        ok: response.ok, 
+                        status: response.status, 
+                        data: data 
+                    };
+                }).catch(function(jsonError) {
+                    console.error('JSON parsing error:', jsonError);
+                    return { 
+                        ok: false, 
+                        status: response.status, 
+                        data: { error: 'Invalid server response' } 
+                    };
                 });
             })
             .then(function(result) {
-                console.log('Response result:', result); 
+                console.log('Response result:', result);
                 if (result.ok) {
                     showStatus(editingScript ? 'Script updated successfully' : 'Script created successfully');
                     closeModal();
                     loadScripts();
                 } else {
-                    showStatus(result.data.error || 'Failed to save script', 'error');
+                    var errorMessage = result.data.error || 'Failed to save script';
+                    console.error('Server error:', errorMessage);
+                    showStatus(errorMessage, 'error');
                 }
             })
             .catch(function(error) {
-                console.error('Submit error:', error);
-                showStatus('Failed to save script', 'error');
+                console.error('Network error:', error);
+                showStatus('Network error: Failed to save script', 'error');
             });
         });
 
