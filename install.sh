@@ -120,7 +120,7 @@ setup_environment() {
     
     # Copy environment template
     cp .env.example .env
-    cp admin/config.yaml.example admin/config.yaml
+    cp admin/example.config.yaml admin/config.yaml
     
     # Get domain
     echo
