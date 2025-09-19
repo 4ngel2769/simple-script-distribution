@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Script Distribution Server Installer
-# Version: v0.6.0
+# Version: v0.7.0
 set -e
 
-VERSION="v0.6.0"
+VERSION="v0.7.0"
 SCRIPT_NAME="Script Distribution Server Installer"
 
 # Colors for output
