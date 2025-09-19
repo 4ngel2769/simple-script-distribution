@@ -303,7 +303,7 @@ main() {
     parse_args "$@"
     
     echo -e "${BLUE}================================${NC}"
-    echo -e "${BLUE}$SCRIPT_NAME v$VERSION${NC}"
+    echo -e "${BLUE}$SCRIPT_NAME $VERSION${NC}"
     echo -e "${BLUE}================================${NC}"
     echo
     
