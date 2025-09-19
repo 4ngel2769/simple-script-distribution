@@ -5,7 +5,7 @@
 }
 
 :80 {
-	root * /var/www/scripts
+	root * /srv/scripts
 	
 	# Admin dashboard routing (must come first)
 	handle /admin* {

@@ -7,7 +7,7 @@ services:
       - "2020:80"
     volumes:
       - /var/www/scripts:/srv/scripts:ro
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:rw
       - caddy_data:/data
       - caddy_config:/config
     environment:
@@ -27,7 +27,8 @@ services:
       - "8080:8080"
     volumes:
       - /var/www/scripts:/app/scripts
-      - ./admin/config.yaml:/app/config.yaml:ro
+      - ./admin/config.yaml:/app/config.yaml:rw
+      - ./Caddyfile:/app/Caddyfile:rw
     environment:
       - PORT=8080
       - SCRIPTS_PATH=/app/scripts

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -177,53 +179,65 @@ func getScriptsAPI(c *fiber.Ctx) error {
 }
 
 func createScriptAPI(c *fiber.Ctx) error {
-	var script ScriptConfig
-	if err := c.BodyParser(&script); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
-	}
+    var script ScriptConfig
+    if err := c.BodyParser(&script); err != nil {
+        return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+    }
 
-	// Validate required fields
-	if script.Name == "" || script.Description == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "Name and description are required"})
-	}
+    // Validate required fields
+    if script.Name == "" || script.Description == "" {
+        return c.Status(400).JSON(fiber.Map{"error": "Name and description are required"})
+    }
 
-	// Check if script already exists
-	for _, existing := range config.Scripts {
-		if existing.Name == script.Name {
-			return c.Status(409).JSON(fiber.Map{"error": "Script already exists"})
-		}
-	}
+    // Sanitize script name (remove spaces, special chars)
+    script.Name = strings.ToLower(strings.ReplaceAll(script.Name, " ", "_"))
+    script.Name = strings.ReplaceAll(script.Name, "-", "_")
 
-	// Set defaults
-	if script.Type == "" {
-		script.Type = "local"
-	}
-	if script.Icon == "" {
-		script.Icon = "📜"
-	}
-	if script.Path == "" {
-		script.Path = script.Name
-	}
+    // Check if script already exists
+    for _, existing := range config.Scripts {
+        if existing.Name == script.Name {
+            return c.Status(409).JSON(fiber.Map{
+                "error": fmt.Sprintf("Script '%s' already exists. Please choose a different name.", script.Name),
+            })
+        }
+    }
 
-	config.Scripts = append(config.Scripts, script)
-	
-	if err := saveConfig(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to save config"})
-	}
+    // Set defaults
+    if script.Type == "" {
+        script.Type = "local"
+    }
+    if script.Icon == "" {
+        script.Icon = "📜"
+    }
+    if script.Path == "" {
+        script.Path = script.Name
+    }
 
-	// Create script directory and file if local type
-	if script.Type == "local" {
-		scriptDir := filepath.Join(scriptsPath, script.Name)
-		os.MkdirAll(scriptDir, 0755)
-		
-		scriptFile := filepath.Join(scriptDir, fmt.Sprintf("runme_%s.sh", script.Name))
-		defaultContent := fmt.Sprintf("#!/bin/bash\n\n# %s\n# Generated on %s\n\necho \"Hello from %s script!\"\n", 
-			script.Description, time.Now().Format("2006-01-02 15:04:05"), script.Name)
-		
-		os.WriteFile(scriptFile, []byte(defaultContent), 0755)
-	}
+    config.Scripts = append(config.Scripts, script)
+    if err := saveConfig(); err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": "Failed to save config"})
+    }
 
-	return c.JSON(script)
+    // Create script directory and file if local type
+    if script.Type == "local" {
+        scriptDir := filepath.Join(scriptsPath, script.Name)
+        os.MkdirAll(scriptDir, 0755)
+        
+        scriptFile := filepath.Join(scriptDir, fmt.Sprintf("runme_%s.sh", script.Name))
+        defaultContent := fmt.Sprintf("#!/bin/bash\n\n# %s\n# Generated on %s\n\necho \"Hello from %s script!\"\n", 
+            script.Description, time.Now().Format("2006-01-02 15:04:05"), script.Name)
+        
+        os.WriteFile(scriptFile, []byte(defaultContent), 0755)
+    }
+
+    // Update Caddyfile if redirect type
+    if script.Type == "redirect" && script.RedirectURL != "" {
+        if err := updateCaddyfileRedirect(script.Name, script.RedirectURL); err != nil {
+            log.Printf("Failed to update Caddyfile: %v", err)
+        }
+    }
+
+    return c.JSON(script)
 }
 
 func updateScriptAPI(c *fiber.Ctx) error {
@@ -262,28 +276,37 @@ func updateScriptAPI(c *fiber.Ctx) error {
 }
 
 func deleteScriptAPI(c *fiber.Ctx) error {
-	name := c.Params("name")
+    name := c.Params("name")
 
-	for i, script := range config.Scripts {
-		if script.Name == name {
-			// Remove from config
-			config.Scripts = append(config.Scripts[:i], config.Scripts[i+1:]...)
-			
-			if err := saveConfig(); err != nil {
-				return c.Status(500).JSON(fiber.Map{"error": "Failed to save config"})
-			}
+    for i, script := range config.Scripts {
+        if script.Name == name {
+            // Remove from config
+            config.Scripts = append(config.Scripts[:i], config.Scripts[i+1:]...)
+            if err := saveConfig(); err != nil {
+                return c.Status(500).JSON(fiber.Map{"error": "Failed to save config"})
+            }
 
-			// Remove script directory if local type
-			if script.Type == "local" {
-				scriptDir := filepath.Join(scriptsPath, script.Name)
-				os.RemoveAll(scriptDir)
-			}
+            // Remove script directory if local type
+            if script.Type == "local" {
+                scriptDir := filepath.Join(scriptsPath, script.Name)
+                os.RemoveAll(scriptDir)
+            }
 
-			return c.JSON(fiber.Map{"message": "Script deleted successfully"})
-		}
-	}
+            // Remove redirect from Caddyfile if redirect type
+            if script.Type == "redirect" {
+                if err := removeCaddyfileRedirect(script.Name); err != nil {
+                    log.Printf("Failed to remove Caddyfile redirect: %v", err)
+                }
+                if err := reloadCaddy(); err != nil {
+                    log.Printf("Failed to reload Caddy: %v", err)
+                }
+            }
 
-	return c.Status(404).JSON(fiber.Map{"error": "Script not found"})
+            return c.JSON(fiber.Map{"message": "Script deleted successfully"})
+        }
+    }
+
+    return c.Status(404).JSON(fiber.Map{"error": "Script not found"})
 }
 
 func getScriptContentAPI(c *fiber.Ctx) error {
@@ -304,30 +327,62 @@ func getScriptContentAPI(c *fiber.Ctx) error {
 	return c.Status(404).JSON(fiber.Map{"error": "Script not found or not local"})
 }
 
-func updateScriptContentAPI(c *fiber.Ctx) error {
-	name := c.Params("name")
-	
-	var req struct {
-		Content string `json:"content"`
-	}
-	
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
-	}
+func updateScriptAPI(c *fiber.Ctx) error {
+    name := c.Params("name")
+    var updates ScriptConfig
 
-	for _, script := range config.Scripts {
-		if script.Name == name && script.Type == "local" {
-			scriptFile := filepath.Join(scriptsPath, script.Name, fmt.Sprintf("runme_%s.sh", script.Name))
-			
-			if err := os.WriteFile(scriptFile, []byte(req.Content), 0755); err != nil {
-				return c.Status(500).JSON(fiber.Map{"error": "Failed to save script"})
-			}
+    if err := c.BodyParser(&updates); err != nil {
+        return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+    }
 
-			return c.JSON(fiber.Map{"message": "Script updated successfully"})
-		}
-	}
+    for i, script := range config.Scripts {
+        if script.Name == name {
+            // Save old type and redirect for comparison
+            oldType := script.Type
+            oldRedirect := script.RedirectURL
 
-	return c.Status(404).JSON(fiber.Map{"error": "Script not found or not local"})
+            // Update fields
+            if updates.Description != "" {
+                config.Scripts[i].Description = updates.Description
+            }
+            if updates.Icon != "" {
+                config.Scripts[i].Icon = updates.Icon
+            }
+            if updates.Type != "" {
+                config.Scripts[i].Type = updates.Type
+            }
+            if updates.RedirectURL != "" {
+                config.Scripts[i].RedirectURL = updates.RedirectURL
+            }
+
+            if err := saveConfig(); err != nil {
+                return c.Status(500).JSON(fiber.Map{"error": "Failed to save config"})
+            }
+
+            // If type or redirect changed, update Caddyfile
+            if oldType == "redirect" && (updates.Type != "redirect" || updates.RedirectURL != oldRedirect) {
+                // Remove old redirect
+                if err := removeCaddyfileRedirect(script.Name); err != nil {
+                    log.Printf("Failed to remove old Caddyfile redirect: %v", err)
+                }
+            }
+            if config.Scripts[i].Type == "redirect" && config.Scripts[i].RedirectURL != "" {
+                // Add or update new redirect
+                if err := updateCaddyfileRedirect(script.Name, config.Scripts[i].RedirectURL); err != nil {
+                    log.Printf("Failed to update Caddyfile redirect: %v", err)
+                }
+            }
+            if (oldType == "redirect" || config.Scripts[i].Type == "redirect") && (updates.RedirectURL != "" || updates.Type != "") {
+                if err := reloadCaddy(); err != nil {
+                    log.Printf("Failed to reload Caddy: %v", err)
+                }
+            }
+
+            return c.JSON(config.Scripts[i])
+        }
+    }
+
+    return c.Status(404).JSON(fiber.Map{"error": "Script not found"})
 }
 
 func updateIndexPageAPI(c *fiber.Ctx) error {
@@ -597,4 +652,91 @@ func generateIndexHTML(scripts []ScriptConfig) string {
     </script>
 </body>
 </html>`, scriptElements.String())
+}
+// Update Caddyfile to add a redirect handler for a script
+func updateCaddyfileRedirect(scriptName, redirectURL string) error {
+    caddyfilePath := "/app/Caddyfile" // Path inside admin-dashboard container
+    // Read the Caddyfile
+    content, err := os.ReadFile(caddyfilePath)
+    if err != nil {
+        return err
+    }
+    caddy := string(content)
+
+    // Remove any existing handler for this script
+    start := fmt.Sprintf("\thandle /%s {", scriptName)
+    end := "}\n"
+    startIdx := strings.Index(caddy, start)
+    if startIdx != -1 {
+        endIdx := strings.Index(caddy[startIdx:], end)
+        if endIdx != -1 {
+            caddy = caddy[:startIdx] + caddy[startIdx+endIdx+len(end):]
+        }
+    }
+
+    // Insert new handler before @script_request
+    insertPoint := strings.Index(caddy, "# Handle other script requests with clean URLs")
+    if insertPoint == -1 {
+        insertPoint = len(caddy)
+    }
+    redirectBlock := fmt.Sprintf("\thandle /%s {\n\t\tredir %s 302\n\t}\n\n", scriptName, redirectURL)
+    caddy = caddy[:insertPoint] + redirectBlock + caddy[insertPoint:]
+
+    // Write back
+    if err := os.WriteFile(caddyfilePath, []byte(caddy), 0644); err != nil {
+        return err
+    }
+
+    return reloadCaddy()
+}
+
+// Remove a redirect handler from the Caddyfile
+func removeCaddyfileRedirect(scriptName string) error {
+    caddyfilePath := "/app/Caddyfile"
+    content, err := os.ReadFile(caddyfilePath)
+    if err != nil {
+        return err
+    }
+    caddy := string(content)
+
+    start := fmt.Sprintf("\thandle /%s {", scriptName)
+    end := "}\n"
+    startIdx := strings.Index(caddy, start)
+    if startIdx != -1 {
+        endIdx := strings.Index(caddy[startIdx:], end)
+        if endIdx != -1 {
+            caddy = caddy[:startIdx] + caddy[startIdx+endIdx+len(end):]
+        }
+    }
+
+    return os.WriteFile(caddyfilePath, []byte(caddy), 0644)
+}
+
+// Reload Caddy via its admin API
+func reloadCaddy() error {
+    caddyfilePath := "/app/Caddyfile"
+    caddyAPI := "http://script-server:2019/load" // Use service name from docker-compose
+
+    caddyfile, err := os.ReadFile(caddyfilePath)
+    if err != nil {
+        return err
+    }
+
+    req, err := http.NewRequest("POST", caddyAPI, bytes.NewReader(caddyfile))
+    if err != nil {
+        return err
+    }
+    req.Header.Set("Content-Type", "text/caddyfile")
+
+    client := &http.Client{Timeout: 5 * time.Second}
+    resp, err := client.Do(req)
+	if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode >= 300 {
+        return fmt.Errorf("Caddy reload failed: %s", resp.Status)
+    }
+    return nil
 }
