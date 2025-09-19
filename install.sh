@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Script Distribution Server Installer
-# Version: v0.5.0
+# Version: v0.6.0
 set -e
 
-VERSION="v0.5.0"
+VERSION="v0.6.0"
 SCRIPT_NAME="Script Distribution Server Installer"
 
 # Colors for output
@@ -248,17 +248,17 @@ setup_directories() {
 # Configure firewall (optional)
 configure_firewall() {
     echo
-    read -p "Configure firewall to allow ports 80 and 8080? (y/N): " configure_fw < /dev/tty
-    
+    read -p "Configure firewall to allow ports 2020 and 8080? (y/N): " configure_fw < /dev/tty
+
     if [[ $configure_fw =~ ^[Yy]$ ]]; then
         info "Configuring firewall..."
-        
+
         if command -v ufw &> /dev/null; then
-            sudo ufw allow 80/tcp
+            sudo ufw allow 2020/tcp
             sudo ufw allow 8080/tcp
             success "UFW rules added"
         elif command -v firewall-cmd &> /dev/null; then
-            sudo firewall-cmd --permanent --add-port=80/tcp
+            sudo firewall-cmd --permanent --add-port=2020/tcp
             sudo firewall-cmd --permanent --add-port=8080/tcp
             sudo firewall-cmd --reload
             success "Firewall rules added"
@@ -282,7 +282,7 @@ start_services() {
     if sudo docker compose ps | grep -q "Up"; then
         success "Services started successfully!"
         echo
-        info "Access your script server at: http://localhost"
+        info "Access your script server at: http://localhost:2020/"
         info "Access admin dashboard at: http://localhost:8080/admin"
         echo
         info "Default credentials:"
