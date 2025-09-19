@@ -34,6 +34,7 @@ type ScriptConfig struct {
 	Icon        string `yaml:"icon"`
 	Type        string `yaml:"type"` // "local" or "redirect"
 	RedirectURL string `yaml:"redirect_url,omitempty"`
+	ScriptPath  string `yaml:"script_path,omitempty"`
 }
 
 type IndexPageData struct {
@@ -85,6 +86,8 @@ func main() {
 	app.Post("/admin/index-page", authMiddleware, updateIndexPageAPI)
 	app.Get("/admin/index-page", authMiddleware, getIndexPageAPI)
 	app.Post("/logout", logoutHandler)
+	app.Get("/admin/browse-files", authMiddleware, browseFilesAPI)
+	app.Get("/admin/browse", authMiddleware, browseFilesAPI)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -213,28 +216,70 @@ func createScriptAPI(c *fiber.Ctx) error {
 		script.Path = script.Name
 	}
 
+	// Validate redirect URL for redirect type
+	if script.Type == "redirect" {
+		if script.RedirectURL == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Redirect URL is required for redirect type scripts"})
+		}
+	}
+
 	config.Scripts = append(config.Scripts, script)
 	if err := saveConfig(); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save config"})
 	}
 
-	// Create script directory and file if local type
+	// Handle local script file linking
 	if script.Type == "local" {
-		scriptDir := filepath.Join(scriptsPath, script.Name)
-		os.MkdirAll(scriptDir, 0755)
+		symlinkPath := filepath.Join(scriptsPath, script.Name)
 
-		scriptFile := filepath.Join(scriptDir, fmt.Sprintf("runme_%s.sh", script.Name))
-		defaultContent := fmt.Sprintf("#!/bin/bash\n\n# %s\n# Generated on %s\n\necho \"Hello from %s script!\"\n",
-			script.Description, time.Now().Format("2006-01-02 15:04:05"), script.Name)
+		if script.ScriptPath != "" {
+			// Remove existing file/symlink
+			os.Remove(symlinkPath)
 
-		os.WriteFile(scriptFile, []byte(defaultContent), 0755)
+			// Create symlink to the selected file
+			if err := os.Symlink(script.ScriptPath, symlinkPath); err != nil {
+				log.Printf("Failed to create symlink: %v", err)
+				return c.Status(500).JSON(fiber.Map{"error": "Failed to link script file"})
+			}
+			log.Printf("Created symlink: %s -> %s", symlinkPath, script.ScriptPath)
+		} else {
+			// Create new script file if no path specified
+			scriptDir := filepath.Join(scriptsPath, script.Name+"_dir")
+			os.MkdirAll(scriptDir, 0755)
+
+			scriptFile := filepath.Join(scriptDir, fmt.Sprintf("%s.sh", script.Name))
+			defaultContent := fmt.Sprintf("#!/bin/bash\n\n# %s\n# Generated on %s\n\necho \"Hello from %s script!\"\necho \"Edit this script through the admin panel.\"\n",
+				script.Description, time.Now().Format("2006-01-02 15:04:05"), script.Name)
+
+			os.WriteFile(scriptFile, []byte(defaultContent), 0755)
+
+			// Create symlink to the new file
+			os.Remove(symlinkPath)
+			if err := os.Symlink(scriptFile, symlinkPath); err != nil {
+				log.Printf("Failed to create symlink: %v", err)
+				return c.Status(500).JSON(fiber.Map{"error": "Failed to link script file"})
+			}
+
+			// Update the script path in config
+			for i := range config.Scripts {
+				if config.Scripts[i].Name == script.Name {
+					config.Scripts[i].ScriptPath = scriptFile
+					break
+				}
+			}
+			saveConfig()
+
+			log.Printf("Created new script and symlink: %s -> %s", symlinkPath, scriptFile)
+		}
 	}
 
 	// Update Caddyfile if redirect type
 	if script.Type == "redirect" && script.RedirectURL != "" {
 		if err := updateCaddyfileRedirect(script.Name, script.RedirectURL); err != nil {
 			log.Printf("Failed to update Caddyfile: %v", err)
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to configure redirect in Caddyfile"})
 		}
+		log.Printf("Added redirect for %s -> %s", script.Name, script.RedirectURL)
 	}
 
 	updateIndexPageWithCurrentScripts()
@@ -656,6 +701,72 @@ func generateIndexHTML(scripts []ScriptConfig) string {
     </script>
 </body>
 </html>`, scriptElements.String())
+}
+
+func browseFilesAPI(c *fiber.Ctx) error {
+	path := c.Query("path", "/app/scripts")
+
+	// only allow browsing within scripts directory
+	if !strings.HasPrefix(path, "/app/scripts") {
+		path = "/app/scripts"
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to read directory"})
+	}
+
+	var files []fiber.Map
+	var dirs []fiber.Map
+
+	// add parent directory if not at root
+	if path != "/app/scripts" {
+		parent := filepath.Dir(path)
+		dirs = append(dirs, fiber.Map{
+			"name":    "..",
+			"path":    parent,
+			"type":    "directory",
+			"isParent": true,
+		})
+	}
+
+	for _, entry := range entries {
+		fullPath := filepath.Join(path, entry.Name())
+		item := fiber.Map{
+			"name": entry.Name(),
+			"path": fullPath,
+		}
+
+		if entry.IsDir() {
+			item["type"] = "directory"
+			dirs = append(dirs, item)
+		} else {
+			// only show executable files and shell scripts
+			if strings.HasSuffix(entry.Name(), ".sh") ||
+				strings.HasSuffix(entry.Name(), ".bash") ||
+				strings.HasSuffix(entry.Name(), ".py") ||
+				isExecutable(fullPath) {
+				item["type"] = "file"
+				files = append(files, item)
+			}
+		}
+	}
+
+	// sort directories first, then files
+	result := append(dirs, files...)
+
+	return c.JSON(fiber.Map{
+		"currentPath": path,
+		"items":       result,
+	})
+}
+
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.Mode()&0111 != 0
 }
 
 // Update Caddyfile to add a redirect handler for a script

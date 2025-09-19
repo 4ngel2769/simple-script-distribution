@@ -221,10 +221,18 @@
                 
                 <div class="form-group">
                     <label for="scriptType">Type</label>
-                    <select id="scriptType" onchange="toggleRedirectField()">
+                    <select id="scriptType" onchange="toggleScriptTypeFields()">
                         <option value="local">Local Script</option>
                         <option value="redirect">Redirect to URL</option>
                     </select>
+                </div>
+                
+                <div class="form-group" id="localGroup" style="display: block;">
+                    <label for="scriptPath">Script File</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="scriptPath" placeholder="Path to script file" readonly style="flex: 1;">
+                        <button type="button" class="btn" onclick="openFileBrowser()">Browse</button>
+                    </div>
                 </div>
                 
                 <div class="form-group" id="redirectGroup" style="display: none;">
@@ -254,9 +262,28 @@
         </div>
     </div>
 
+    <!-- File Browser Modal -->
+    <div id="fileBrowserModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Select Script File</h2>
+            
+            <div id="currentPath" style="margin-bottom: 15px; font-family: monospace; color: #8b949e;"></div>
+            
+            <div id="fileList" style="max-height: 400px; overflow-y: auto; border: 1px solid #30363d; border-radius: 6px; padding: 10px;">
+                <!-- File browser content will be loaded here -->
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <button class="btn" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let editingScript = null;
         let editingContent = null;
+        let currentBrowsePath = '/app/scripts';
 
         // Load scripts on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -282,6 +309,11 @@
                 const container = document.getElementById('scriptsList');
                 container.innerHTML = '';
                 
+                if (scripts.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #8b949e;">No scripts configured yet. Click "Add New Script" to get started.</p>';
+                    return;
+                }
+                
                 scripts.forEach(script => {
                     const scriptDiv = document.createElement('div');
                     scriptDiv.className = 'script-item';
@@ -289,7 +321,7 @@
                         <h3>${script.icon || '📜'} ${script.name || 'Unnamed'}</h3>
                         <p>${script.description || 'No description'}</p>
                         <p><strong>Type:</strong> ${script.type || 'local'}</p>
-                        ${script.redirect_url ? `<p><strong>Redirects to:</strong> ${script.redirect_url}</p>` : ''}
+                        ${script.redirect_url ? `<p><strong>Redirects to:</strong> <a href="${script.redirect_url}" target="_blank" style="color: #58a6ff;">${script.redirect_url}</a></p>` : ''}
                         <div class="script-actions">
                             <button class="btn" onclick="editScript('${script.name}')">Edit</button>
                             ${script.type === 'local' ? `<button class="btn" onclick="editContent('${script.name}')">Edit Content</button>` : ''}
@@ -299,6 +331,7 @@
                     container.appendChild(scriptDiv);
                 });
             } catch (error) {
+                console.error('Error loading scripts:', error);
                 showStatus('Failed to load scripts', 'error');
             }
         }
@@ -311,7 +344,6 @@
         }
 
         function editScript(name) {
-            // Find the script in the loaded data
             fetch('/admin/scripts')
                 .then(response => response.json())
                 .then(scripts => {
@@ -319,15 +351,19 @@
                     if (script) {
                         editingScript = name;
                         document.getElementById('modalTitle').textContent = 'Edit Script';
-                        document.getElementById('scriptName').value = script.name;
+                        document.getElementById('scriptName').value = script.name || '';
                         document.getElementById('scriptName').disabled = true;
-                        document.getElementById('scriptDescription').value = script.description;
-                        document.getElementById('scriptIcon').value = script.icon;
-                        document.getElementById('scriptType').value = script.type;
+                        document.getElementById('scriptDescription').value = script.description || '';
+                        document.getElementById('scriptIcon').value = script.icon || '📜';
+                        document.getElementById('scriptType').value = script.type || 'local';
                         document.getElementById('redirectUrl').value = script.redirect_url || '';
-                        toggleRedirectField();
+                        toggleScriptTypeFields();
                         document.getElementById('scriptModal').style.display = 'block';
                     }
+                })
+                .catch(error => {
+                    console.error('Error fetching script:', error);
+                    showStatus('Failed to load script for editing', 'error');
                 });
         }
 
@@ -367,15 +403,89 @@
             }
         }
 
-        function toggleRedirectField() {
+        function toggleScriptTypeFields() {
             const type = document.getElementById('scriptType').value;
+            const localGroup = document.getElementById('localGroup');
             const redirectGroup = document.getElementById('redirectGroup');
-            redirectGroup.style.display = type === 'redirect' ? 'block' : 'none';
+            
+            if (type === 'local') {
+                localGroup.style.display = 'block';
+                redirectGroup.style.display = 'none';
+            } else {
+                localGroup.style.display = 'none';
+                redirectGroup.style.display = 'block';
+            }
         }
 
+        function openFileBrowser() {
+            currentBrowsePath = '/app/scripts';
+            loadFileBrowser(currentBrowsePath);
+            document.getElementById('fileBrowserModal').style.display = 'block';
+        }
+
+        async function loadFileBrowser(path) {
+            try {
+                const response = await fetch(`/admin/browse?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+                
+                document.getElementById('currentPath').textContent = `Current: ${data.currentPath}`;
+                
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = '';
+                
+                if (data.items.length === 0) {
+                    fileList.innerHTML = '<p style="color: #8b949e; text-align: center;">No files found in this directory</p>';
+                    return;
+                }
+                
+                data.items.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.style.cssText = 'padding: 8px; margin: 4px 0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px;';
+                    itemDiv.style.backgroundColor = '#0d1117';
+                    itemDiv.style.border = '1px solid #21262d';
+                    
+                    const icon = item.type === 'directory' ? '📁' : '📄';
+                    const name = item.isParent ? '📁 ..' : `${icon} ${item.name}`;
+                    
+                    itemDiv.innerHTML = `<span>${name}</span>`;
+                    
+                    itemDiv.addEventListener('mouseover', () => {
+                        itemDiv.style.backgroundColor = '#21262d';
+                    });
+                    
+                    itemDiv.addEventListener('mouseout', () => {
+                        itemDiv.style.backgroundColor = '#0d1117';
+                    });
+                    
+                    itemDiv.addEventListener('click', () => {
+                        if (item.type === 'directory') {
+                            currentBrowsePath = item.path;
+                            loadFileBrowser(item.path);
+                        } else {
+                            // File selected
+                            selectFile(item.path, item.name);
+                        }
+                    });
+                    
+                    fileList.appendChild(itemDiv);
+                });
+            } catch (error) {
+                console.error('Error loading file browser:', error);
+                showStatus('Failed to load file browser', 'error');
+            }
+        }
+
+        function selectFile(path, name) {
+            document.getElementById('scriptPath').value = path;
+            closeModal();
+            showStatus(`Selected file: ${name}`, 'success');
+        }
+
+        // Update the closeModal function to handle all modals
         function closeModal() {
             document.getElementById('scriptModal').style.display = 'none';
             document.getElementById('contentModal').style.display = 'none';
+            document.getElementById('fileBrowserModal').style.display = 'none';
             document.getElementById('scriptName').disabled = false;
             editingScript = null;
             editingContent = null;
@@ -385,13 +495,28 @@
         document.getElementById('scriptForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            const type = document.getElementById('scriptType').value;
             const formData = {
                 name: document.getElementById('scriptName').value,
                 description: document.getElementById('scriptDescription').value,
                 icon: document.getElementById('scriptIcon').value,
-                type: document.getElementById('scriptType').value,
-                redirect_url: document.getElementById('redirectUrl').value
+                type: type,
             };
+            
+            if (type === 'redirect') {
+                formData.redirect_url = document.getElementById('redirectUrl').value;
+                if (!formData.redirect_url) {
+                    showStatus('Redirect URL is required for redirect type scripts', 'error');
+                    return;
+                }
+            } else if (type === 'local') {
+                const scriptPath = document.getElementById('scriptPath').value;
+                if (!scriptPath && !editingScript) {
+                    showStatus('Please select a script file or create a new one will be created', 'error');
+                    return;
+                }
+                formData.script_path = scriptPath;
+            }
 
             try {
                 let response;
@@ -473,7 +598,8 @@
         window.onclick = function(event) {
             const scriptModal = document.getElementById('scriptModal');
             const contentModal = document.getElementById('contentModal');
-            if (event.target === scriptModal || event.target === contentModal) {
+            const fileBrowserModal = document.getElementById('fileBrowserModal');
+            if (event.target === scriptModal || event.target === contentModal || event.target === fileBrowserModal) {
                 closeModal();
             }
         };
