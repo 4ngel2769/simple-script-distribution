@@ -1,69 +1,70 @@
-# No HTTPS needed since Cloudflare handles it
 {
-	auto_https off
-	admin 0.0.0.0:2019
+    auto_https off
+    admin 0.0.0.0:2019
+    debug
 }
 
 :80 {
-	root * /srv/scripts
-	
-	# Admin dashboard routing (must come first)
-	handle /admin* {
-		reverse_proxy admin-dashboard:8080
-	}
-	
-	# Health check
-	handle /health {
-		header Content-Type "text/plain"
-		respond "OK"
-	}
-	
-	# Handle script requests with clean URLs
-	@script_request {
-		path_regexp script ^/([^/]+)/?$
-	}
-	
-	# Try multiple file patterns and follow symlinks
-	handle @script_request {
-		# Set headers first
-		header Content-Type "text/plain; charset=utf-8"
-		header Cache-Control "no-cache, must-revalidate"
-		header X-Content-Type-Options "nosniff"
-		
-		# Try the symlinked file first, then other patterns
-		try_files {re.script.1} {re.script.1}.sh {re.script.1}/{re.script.1}.sh {re.script.1}/runme_{re.script.1}.sh
-		
-		file_server {
-			# Follow symlinks
-			follow_symlinks
-		}
-	}
-	
-	# Root page - serve static HTML
-	handle / {
-		try_files index.html
-		file_server
-	}
-	
-	# Hide sensitive files
-	@hidden {
-		path */.*
-		path */.backups/*
-	}
-	handle @hidden {
-		respond "Not Found" 404
-	}
-	
-	# Fallback 404
-	handle {
-		header Content-Type "text/plain"
-		respond "Script not found" 404
-	}
-	
-	# Logging
-	log {
-		output stdout
-		format console
-		level DEBUG
-	}
+    root * /srv/scripts
+    
+    # Enable logging for debugging
+    log {
+        output stdout
+        format console
+        level DEBUG
+    }
+    
+    # Admin dashboard routing (must come first)
+    handle_path /admin* {
+        reverse_proxy admin-dashboard:8080
+    }
+    
+    # Health check
+    handle /health {
+        header Content-Type "text/plain"
+        respond "OK" 200
+    }
+    
+    # Handle script requests
+    handle_path /* {
+        @script_files {
+            file
+            path_regexp ^/([^/]+)/?$
+        }
+        
+        # Try to serve the file directly
+        handle @script_files {
+            header Content-Type "text/plain; charset=utf-8"
+            header Cache-Control "no-cache"
+            file_server
+        }
+        
+        # If not a file, try various script patterns
+        @script_request {
+            not file
+            path_regexp script_name ^/([^/]+)/?$
+        }
+        
+        handle @script_request {
+            header Content-Type "text/plain; charset=utf-8"
+            header Cache-Control "no-cache"
+            
+            # Try multiple file patterns
+            try_files {re.script_name.1} {re.script_name.1}.sh {re.script_name.1}/runme_{re.script_name.1}.sh
+            
+            file_server
+        }
+    }
+    
+    # Root page
+    handle / {
+        try_files index.html
+        file_server
+    }
+    
+    # Final fallback
+    handle {
+        header Content-Type "text/plain"
+        respond "Script not found" 404
+    }
 }
