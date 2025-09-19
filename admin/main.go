@@ -28,13 +28,13 @@ type Config struct {
 }
 
 type ScriptConfig struct {
-	Name        string `yaml:"name"`
-	Path        string `yaml:"path"`
-	Description string `yaml:"description"`
-	Icon        string `yaml:"icon"`
-	Type        string `yaml:"type"` // "local" or "redirect"
-	RedirectURL string `yaml:"redirect_url,omitempty"`
-	ScriptPath  string `yaml:"script_path,omitempty"`
+	Name        string `yaml:"name" json:"name"`
+	Path        string `yaml:"path" json:"path"`
+	Description string `yaml:"description" json:"description"`
+	Icon        string `yaml:"icon" json:"icon"`
+	Type        string `yaml:"type" json:"type"` // "local" or "redirect"
+	RedirectURL string `yaml:"redirect_url,omitempty" json:"redirect_url,omitempty"`
+	ScriptPath  string `yaml:"script_path,omitempty" json:"script_path,omitempty"`
 }
 
 type IndexPageData struct {
