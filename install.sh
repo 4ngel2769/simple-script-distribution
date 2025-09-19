@@ -1,7 +1,11 @@
 #!/bin/bash
 
 # Script Distribution Server Installer
+# Version: v0.4.0
 set -e
+
+VERSION="v0.4.0"
+SCRIPT_NAME="Script Distribution Server Installer"
 
 # Colors for output
 RED='\033[0;31m'
@@ -15,6 +19,56 @@ info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+show_version() {
+    echo -e "${BLUE}$SCRIPT_NAME${NC}"
+    echo -e "${BLUE}Version: $VERSION${NC}"
+    echo
+    echo "A lightweight script distribution server installer"
+    echo "Repository: https://github.com/4ngel2769/simple-script-distribution"
+    echo
+    exit 0
+}
+
+show_help() {
+    echo -e "${BLUE}$SCRIPT_NAME v$VERSION${NC}"
+    echo
+    echo "Usage: $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    echo "  -h, --help     Show this help message"
+    echo "  -v, --version  Show version information"
+    echo
+    echo "Description:"
+    echo "  Installs and configures a script distribution server with web admin dashboard."
+    echo "  The server allows you to host and distribute shell scripts via clean URLs."
+    echo
+    echo "Examples:"
+    echo "  $0              # Run interactive installation"
+    echo "  $0 -v           # Show version"
+    echo "  $0 --help       # Show this help"
+    echo
+    exit 0
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                ;;
+            -v|--version)
+                show_version
+                ;;
+            *)
+                error "Unknown option: $1"
+                echo "Use '$0 --help' for usage information"
+                exit 1
+                ;;
+        esac
+        shift
+    done
+}
 
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
@@ -245,10 +299,11 @@ start_services() {
     fi
 }
 
-# Main installation flow
 main() {
+    parse_args "$@"
+    
     echo -e "${BLUE}================================${NC}"
-    echo -e "${BLUE}Script Distribution Server Setup${NC}"
+    echo -e "${BLUE}$SCRIPT_NAME v$VERSION${NC}"
     echo -e "${BLUE}================================${NC}"
     echo
     
@@ -263,6 +318,7 @@ main() {
     echo
     success "Installation completed successfully!"
     echo
+    info "Installed version: $VERSION"
     info "Next steps:"
     echo "1. Access admin dashboard and create your first script"
     echo "2. Update the index page through the admin panel"
@@ -276,5 +332,5 @@ main() {
     echo "  Restart services: sudo docker compose restart"
 }
 
-# Run main function
-main "$@"
+# # Run main function
+# main "$@"
