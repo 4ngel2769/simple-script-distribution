@@ -31,7 +31,7 @@ show_version() {
 }
 
 show_help() {
-    echo -e "${BLUE}$SCRIPT_NAME v$VERSION${NC}"
+    echo -e "${BLUE}$SCRIPT_NAME $VERSION${NC}"
     echo
     echo "Usage: $0 [OPTIONS]"
     echo

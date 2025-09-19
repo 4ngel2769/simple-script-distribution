@@ -547,16 +547,16 @@ func generateIndexHTML(scripts []ScriptConfig) string {
         <div class="usage">
             <h3><span class="emoji">📖</span>Usage Examples</h3>
             <p>Direct download:</p>
-            <p><code onclick="copyToClipboard(currentDomain + '/tor')">curl [domain]/tor</code></p>
+            <p><code>curl [your-domain]/scriptname</code></p>
             <p>Download and execute:</p>
-            <p><code onclick="copyToClipboard('curl -fsSL ' + currentDomain + '/tor | sudo bash')">curl -fsSL [domain]/tor | sudo bash</code></p>
+            <p><code>curl -fsSL [your-domain]/scriptname | sudo bash</code></p>
             <p>Save to file:</p>
-            <p><code onclick="copyToClipboard('curl -o install-script.sh ' + currentDomain + '/tor')">curl -o install-script.sh [domain]/tor</code></p>
+            <p><code>curl -o script.sh [your-domain]/scriptname</code></p>
         </div>
         
         <div class="health">
             <p><span class="emoji">🔗</span>Health check: 
-                <span class="endpoint" onclick="copyToClipboard('curl https://' + window.location.host + '/health')">/health</span>
+                <span class="endpoint" onclick="copyHealthCheck()">/health</span>
             </p>
         </div>
     </div>
@@ -583,7 +583,6 @@ func generateIndexHTML(scripts []ScriptConfig) string {
         });
 
         function copyToClipboard(text) {
-            // Try the modern clipboard API first
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(text).then(() => {
                     showToast();
@@ -591,7 +590,6 @@ func generateIndexHTML(scripts []ScriptConfig) string {
                     fallbackCopyToClipboard(text);
                 });
             } else {
-                // Fallback for older browsers or non-HTTPS
                 fallbackCopyToClipboard(text);
             }
         }
@@ -611,7 +609,6 @@ func generateIndexHTML(scripts []ScriptConfig) string {
                 showToast();
             } catch (err) {
                 console.error('Failed to copy: ', err);
-                // Show a prompt as last resort
                 prompt('Copy this command:', text);
             }
             
@@ -638,18 +635,22 @@ func generateIndexHTML(scripts []ScriptConfig) string {
             }, 2000);
         }
 
-        // Update usage examples with current domain
+        function copyHealthCheck() {
+            copyToClipboard('curl ' + currentDomain + '/health');
+        }
+
+        // Update usage examples with current domain when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            // Update the usage examples to use the current domain
             const codeElements = document.querySelectorAll('.usage code');
             codeElements.forEach(code => {
                 let text = code.textContent;
-                // Replace any hardcoded domains with current domain
-                text = text.replace(/https:\/\/[^\/]+/, currentDomain);
+                text = text.replace('[your-domain]', currentDomain);
                 code.textContent = text;
                 
-                // Update onclick to use the corrected text
-                code.setAttribute('onclick', `copyToClipboard('${text}')`);
+                // Add click to copy functionality
+                code.addEventListener('click', function() {
+                    copyToClipboard(this.textContent);
+                });
             });
         });
     </script>
