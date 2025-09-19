@@ -172,6 +172,20 @@
             border: 1px solid rgba(248, 81, 73, 0.5);
             color: #f85149;
         }
+        .file-browser-item {
+            padding: 8px;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #0d1117;
+            border: 1px solid #21262d;
+        }
+        .file-browser-item:hover {
+            background: #21262d;
+        }
     </style>
 </head>
 <body>
@@ -281,73 +295,102 @@
     </div>
 
     <script>
-        let editingScript = null;
-        let editingContent = null;
-        let currentBrowsePath = '/app/scripts';
+        var editingScript = null;
+        var editingContent = null;
+        var currentBrowsePath = '/app/scripts';
 
         // Load scripts on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadScripts();
         });
 
-        function showStatus(message, type = 'success') {
-            const status = document.getElementById('status');
+        function showStatus(message, type) {
+            type = type || 'success';
+            var status = document.getElementById('status');
             status.textContent = message;
-            status.className = `status ${type}`;
+            status.className = 'status ' + type;
             status.style.display = 'block';
             
-            setTimeout(() => {
+            setTimeout(function() {
                 status.style.display = 'none';
             }, 5000);
         }
 
-        async function loadScripts() {
-            try {
-                const response = await fetch('/admin/scripts');
-                const scripts = await response.json();
-                
-                const container = document.getElementById('scriptsList');
-                container.innerHTML = '';
-                
-                if (scripts.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; color: #8b949e;">No scripts configured yet. Click "Add New Script" to get started.</p>';
-                    return;
-                }
-                
-                scripts.forEach(script => {
-                    const scriptDiv = document.createElement('div');
-                    scriptDiv.className = 'script-item';
-                    scriptDiv.innerHTML = `
-                        <h3>${script.icon || '📜'} ${script.name || 'Unnamed'}</h3>
-                        <p>${script.description || 'No description'}</p>
-                        <p><strong>Type:</strong> ${script.type || 'local'}</p>
-                        ${script.redirect_url ? `<p><strong>Redirects to:</strong> <a href="${script.redirect_url}" target="_blank" style="color: #58a6ff;">${script.redirect_url}</a></p>` : ''}
-                        <div class="script-actions">
-                            <button class="btn" onclick="editScript('${script.name}')">Edit</button>
-                            ${script.type === 'local' ? `<button class="btn" onclick="editContent('${script.name}')">Edit Content</button>` : ''}
-                            <button class="btn btn-danger" onclick="deleteScript('${script.name}')">Delete</button>
-                        </div>
-                    `;
-                    container.appendChild(scriptDiv);
+        function loadScripts() {
+            fetch('/admin/scripts')
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(scripts) {
+                    var container = document.getElementById('scriptsList');
+                    container.innerHTML = '';
+                    
+                    if (scripts.length === 0) {
+                        container.innerHTML = '<p style="text-align: center; color: #8b949e;">No scripts configured yet. Click "Add New Script" to get started.</p>';
+                        return;
+                    }
+                    
+                    scripts.forEach(function(script) {
+                        var scriptDiv = document.createElement('div');
+                        scriptDiv.className = 'script-item';
+                        
+                        var icon = script.icon || '📜';
+                        var name = script.name || 'Unnamed';
+                        var description = script.description || 'No description';
+                        var type = script.type || 'local';
+                        var redirectInfo = '';
+                        
+                        if (script.redirect_url) {
+                            redirectInfo = '<p><strong>Redirects to:</strong> <a href="' + script.redirect_url + '" target="_blank" style="color: #58a6ff;">' + script.redirect_url + '</a></p>';
+                        }
+                        
+                        var editContentButton = '';
+                        if (type === 'local') {
+                            editContentButton = '<button class="btn" onclick="editContent(\'' + name + '\')">Edit Content</button>';
+                        }
+                        
+                        scriptDiv.innerHTML = '<h3>' + icon + ' ' + name + '</h3>' +
+                            '<p>' + description + '</p>' +
+                            '<p><strong>Type:</strong> ' + type + '</p>' +
+                            redirectInfo +
+                            '<div class="script-actions">' +
+                                '<button class="btn" onclick="editScript(\'' + name + '\')">Edit</button>' +
+                                editContentButton +
+                                '<button class="btn btn-danger" onclick="deleteScript(\'' + name + '\')">Delete</button>' +
+                            '</div>';
+                        
+                        container.appendChild(scriptDiv);
+                    });
+                })
+                .catch(function(error) {
+                    console.error('Error loading scripts:', error);
+                    showStatus('Failed to load scripts', 'error');
                 });
-            } catch (error) {
-                console.error('Error loading scripts:', error);
-                showStatus('Failed to load scripts', 'error');
-            }
         }
 
         function openCreateModal() {
             editingScript = null;
             document.getElementById('modalTitle').textContent = 'Add New Script';
             document.getElementById('scriptForm').reset();
+            document.getElementById('scriptIcon').value = '📜';
+            toggleScriptTypeFields();
             document.getElementById('scriptModal').style.display = 'block';
         }
 
         function editScript(name) {
             fetch('/admin/scripts')
-                .then(response => response.json())
-                .then(scripts => {
-                    const script = scripts.find(s => s.name === name);
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(scripts) {
+                    var script = null;
+                    for (var i = 0; i < scripts.length; i++) {
+                        if (scripts[i].name === name) {
+                            script = scripts[i];
+                            break;
+                        }
+                    }
+                    
                     if (script) {
                         editingScript = name;
                         document.getElementById('modalTitle').textContent = 'Edit Script';
@@ -357,11 +400,12 @@
                         document.getElementById('scriptIcon').value = script.icon || '📜';
                         document.getElementById('scriptType').value = script.type || 'local';
                         document.getElementById('redirectUrl').value = script.redirect_url || '';
+                        document.getElementById('scriptPath').value = script.script_path || '';
                         toggleScriptTypeFields();
                         document.getElementById('scriptModal').style.display = 'block';
                     }
                 })
-                .catch(error => {
+                .catch(function(error) {
                     console.error('Error fetching script:', error);
                     showStatus('Failed to load script for editing', 'error');
                 });
@@ -369,44 +413,46 @@
 
         function editContent(name) {
             editingContent = name;
-            document.getElementById('contentModalTitle').textContent = `Edit Content: ${name}`;
+            document.getElementById('contentModalTitle').textContent = 'Edit Content: ' + name;
             
-            fetch(`/admin/scripts/${name}/content`)
-                .then(response => response.json())
-                .then(data => {
+            fetch('/admin/scripts/' + name + '/content')
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
                     document.getElementById('scriptContent').value = data.content;
                     document.getElementById('contentModal').style.display = 'block';
                 })
-                .catch(error => {
+                .catch(function(error) {
                     showStatus('Failed to load script content', 'error');
                 });
         }
 
-        async function deleteScript(name) {
-            if (!confirm(`Are you sure you want to delete the script "${name}"?`)) {
+        function deleteScript(name) {
+            if (!confirm('Are you sure you want to delete the script "' + name + '"?')) {
                 return;
             }
 
-            try {
-                const response = await fetch(`/admin/scripts/${name}`, {
-                    method: 'DELETE'
-                });
-
+            fetch('/admin/scripts/' + name, {
+                method: 'DELETE'
+            })
+            .then(function(response) {
                 if (response.ok) {
                     showStatus('Script deleted successfully');
                     loadScripts();
                 } else {
                     showStatus('Failed to delete script', 'error');
                 }
-            } catch (error) {
+            })
+            .catch(function(error) {
                 showStatus('Failed to delete script', 'error');
-            }
+            });
         }
 
         function toggleScriptTypeFields() {
-            const type = document.getElementById('scriptType').value;
-            const localGroup = document.getElementById('localGroup');
-            const redirectGroup = document.getElementById('redirectGroup');
+            var type = document.getElementById('scriptType').value;
+            var localGroup = document.getElementById('localGroup');
+            var redirectGroup = document.getElementById('redirectGroup');
             
             if (type === 'local') {
                 localGroup.style.display = 'block';
@@ -423,65 +469,55 @@
             document.getElementById('fileBrowserModal').style.display = 'block';
         }
 
-        async function loadFileBrowser(path) {
-            try {
-                const response = await fetch(`/admin/browse?path=${encodeURIComponent(path)}`);
-                const data = await response.json();
-                
-                document.getElementById('currentPath').textContent = `Current: ${data.currentPath}`;
-                
-                const fileList = document.getElementById('fileList');
-                fileList.innerHTML = '';
-                
-                if (data.items.length === 0) {
-                    fileList.innerHTML = '<p style="color: #8b949e; text-align: center;">No files found in this directory</p>';
-                    return;
-                }
-                
-                data.items.forEach(item => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.style.cssText = 'padding: 8px; margin: 4px 0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px;';
-                    itemDiv.style.backgroundColor = '#0d1117';
-                    itemDiv.style.border = '1px solid #21262d';
+        function loadFileBrowser(path) {
+            fetch('/admin/browse?path=' + encodeURIComponent(path))
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
+                    document.getElementById('currentPath').textContent = 'Current: ' + data.currentPath;
                     
-                    const icon = item.type === 'directory' ? '📁' : '📄';
-                    const name = item.isParent ? '📁 ..' : `${icon} ${item.name}`;
+                    var fileList = document.getElementById('fileList');
+                    fileList.innerHTML = '';
                     
-                    itemDiv.innerHTML = `<span>${name}</span>`;
+                    if (data.items.length === 0) {
+                        fileList.innerHTML = '<p style="color: #8b949e; text-align: center;">No files found in this directory</p>';
+                        return;
+                    }
                     
-                    itemDiv.addEventListener('mouseover', () => {
-                        itemDiv.style.backgroundColor = '#21262d';
+                    data.items.forEach(function(item) {
+                        var itemDiv = document.createElement('div');
+                        itemDiv.className = 'file-browser-item';
+                        
+                        var icon = item.type === 'directory' ? '📁' : '📄';
+                        var name = item.isParent ? '📁 ..' : icon + ' ' + item.name;
+                        
+                        itemDiv.innerHTML = '<span>' + name + '</span>';
+                        
+                        itemDiv.addEventListener('click', function() {
+                            if (item.type === 'directory') {
+                                currentBrowsePath = item.path;
+                                loadFileBrowser(item.path);
+                            } else {
+                                selectFile(item.path, item.name);
+                            }
+                        });
+                        
+                        fileList.appendChild(itemDiv);
                     });
-                    
-                    itemDiv.addEventListener('mouseout', () => {
-                        itemDiv.style.backgroundColor = '#0d1117';
-                    });
-                    
-                    itemDiv.addEventListener('click', () => {
-                        if (item.type === 'directory') {
-                            currentBrowsePath = item.path;
-                            loadFileBrowser(item.path);
-                        } else {
-                            // File selected
-                            selectFile(item.path, item.name);
-                        }
-                    });
-                    
-                    fileList.appendChild(itemDiv);
+                })
+                .catch(function(error) {
+                    console.error('Error loading file browser:', error);
+                    showStatus('Failed to load file browser', 'error');
                 });
-            } catch (error) {
-                console.error('Error loading file browser:', error);
-                showStatus('Failed to load file browser', 'error');
-            }
         }
 
         function selectFile(path, name) {
             document.getElementById('scriptPath').value = path;
             closeModal();
-            showStatus(`Selected file: ${name}`, 'success');
+            showStatus('Selected file: ' + name, 'success');
         }
 
-        // Update the closeModal function to handle all modals
         function closeModal() {
             document.getElementById('scriptModal').style.display = 'none';
             document.getElementById('contentModal').style.display = 'none';
@@ -491,16 +527,40 @@
             editingContent = null;
         }
 
+        function updateIndexPage() {
+            fetch('/admin/scripts')
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(scripts) {
+                    return fetch('/admin/index-page', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ scripts: scripts })
+                    });
+                })
+                .then(function(response) {
+                    if (response.ok) {
+                        showStatus('Index page updated successfully');
+                    } else {
+                        showStatus('Failed to update index page', 'error');
+                    }
+                })
+                .catch(function(error) {
+                    showStatus('Failed to update index page', 'error');
+                });
+        }
+
         // Handle script form submission
-        document.getElementById('scriptForm').addEventListener('submit', async function(e) {
+        document.getElementById('scriptForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const type = document.getElementById('scriptType').value;
-            const formData = {
+            var type = document.getElementById('scriptType').value;
+            var formData = {
                 name: document.getElementById('scriptName').value,
                 description: document.getElementById('scriptDescription').value,
                 icon: document.getElementById('scriptIcon').value,
-                type: type,
+                type: type
             };
             
             if (type === 'redirect') {
@@ -510,95 +570,68 @@
                     return;
                 }
             } else if (type === 'local') {
-                const scriptPath = document.getElementById('scriptPath').value;
-                if (!scriptPath && !editingScript) {
-                    showStatus('Please select a script file or create a new one will be created', 'error');
-                    return;
-                }
+                var scriptPath = document.getElementById('scriptPath').value;
                 formData.script_path = scriptPath;
             }
 
-            try {
-                let response;
-                if (editingScript) {
-                    response = await fetch(`/admin/scripts/${editingScript}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
-                } else {
-                    response = await fetch('/admin/scripts', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
-                }
+            var method = editingScript ? 'PUT' : 'POST';
+            var url = editingScript ? '/admin/scripts/' + editingScript : '/admin/scripts';
 
-                if (response.ok) {
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            })
+            .then(function(response) {
+                return response.json().then(function(data) {
+                    return { ok: response.ok, data: data };
+                });
+            })
+            .then(function(result) {
+                if (result.ok) {
                     showStatus(editingScript ? 'Script updated successfully' : 'Script created successfully');
                     closeModal();
                     loadScripts();
                 } else {
-                    const error = await response.json();
-                    showStatus(error.error || 'Failed to save script', 'error');
+                    showStatus(result.data.error || 'Failed to save script', 'error');
                 }
-            } catch (error) {
+            })
+            .catch(function(error) {
                 showStatus('Failed to save script', 'error');
-            }
+            });
         });
 
         // Handle content form submission
-        document.getElementById('contentForm').addEventListener('submit', async function(e) {
+        document.getElementById('contentForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
             if (!editingContent) return;
 
-            const content = document.getElementById('scriptContent').value;
+            var content = document.getElementById('scriptContent').value;
 
-            try {
-                const response = await fetch(`/admin/scripts/${editingContent}/content`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content })
-                });
-
+            fetch('/admin/scripts/' + editingContent + '/content', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: content })
+            })
+            .then(function(response) {
                 if (response.ok) {
                     showStatus('Script content updated successfully');
                     closeModal();
                 } else {
                     showStatus('Failed to update script content', 'error');
                 }
-            } catch (error) {
+            })
+            .catch(function(error) {
                 showStatus('Failed to update script content', 'error');
-            }
+            });
         });
-
-        async function updateIndexPage() {
-            try {
-                const response = await fetch('/admin/scripts');
-                const scripts = await response.json();
-                
-                const updateResponse = await fetch('/admin/index-page', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scripts })
-                });
-
-                if (updateResponse.ok) {
-                    showStatus('Index page updated successfully');
-                } else {
-                    showStatus('Failed to update index page', 'error');
-                }
-            } catch (error) {
-                showStatus('Failed to update index page', 'error');
-            }
-        }
 
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const scriptModal = document.getElementById('scriptModal');
-            const contentModal = document.getElementById('contentModal');
-            const fileBrowserModal = document.getElementById('fileBrowserModal');
+            var scriptModal = document.getElementById('scriptModal');
+            var contentModal = document.getElementById('contentModal');
+            var fileBrowserModal = document.getElementById('fileBrowserModal');
             if (event.target === scriptModal || event.target === contentModal || event.target === fileBrowserModal) {
                 closeModal();
             }
