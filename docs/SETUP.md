@@ -244,6 +244,6 @@ sudo docker compose up -d
 
 ## Next Steps
 
-- [API Documentation](API.md) - Learn about the admin API
-- [Deployment Guide](DEPLOYMENT.md) - Advanced deployment scenarios
+- [API Documentation](/docs/API.md) - Learn about the admin API
+- [Deployment Guide](/docs/DEPLOYMENT.md) - Advanced deployment scenarios
 - Check the [GitHub Issues](https://github.com/4ngel2769/simple-script-distribution/issues) for known issues

@@ -34,7 +34,7 @@ check_dependencies() {
     fi
     
     # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+    if ! command -v docker-compose &> /dev/null && ! sudo docker compose version &> /dev/null; then
         error "Docker Compose is not installed. Please install Docker Compose first."
         echo "Visit: https://docs.docker.com/compose/install/"
         exit 1
@@ -147,7 +147,17 @@ setup_environment() {
     if command -v go &> /dev/null; then
         info "Generating password hash..."
         cd admin
-        PASS_HASH=$(go run hash_password.go "$ADMIN_PASS" | tail -n1)
+        
+        info "Installing Go dependencies..."
+        go mod download
+        go mod tidy
+        
+        PASS_HASH=$(go run cmd/hash_password/hash_password.go "$ADMIN_PASS" 2>/dev/null | tail -n1)
+        
+        # Fallback to old path if new structure doesn't exist
+        if [ -z "$PASS_HASH" ] && [ -f "hash_password.go" ]; then
+            PASS_HASH=$(go run hash_password.go "$ADMIN_PASS" | tail -n1)
+        fi
         
         # Update config
         sed -i "s/username: .*/username: $ADMIN_USER/" config.yaml
@@ -157,7 +167,7 @@ setup_environment() {
         success "Password hash generated and configured"
     else
         warning "Cannot generate password hash without Go. Please do this manually."
-        echo "Run: cd admin && go run hash_password.go \"$ADMIN_PASS\""
+        echo "Run: cd admin && go run cmd/hash_password/hash_password.go \"$ADMIN_PASS\""
         echo "Then update admin/config.yaml with the generated hash"
     fi
 }
@@ -209,13 +219,13 @@ start_services() {
     info "Building and starting services..."
     
     # Build and start
-    docker compose up --build -d
+    sudo docker compose up --build -d
     
     # Wait a moment for services to start
     sleep 5
     
     # Check status
-    if docker compose ps | grep -q "Up"; then
+    if sudo docker compose ps | grep -q "Up"; then
         success "Services started successfully!"
         echo
         info "Access your script server at: http://localhost"
@@ -230,7 +240,7 @@ start_services() {
         warning "2. Configure your domain DNS"
         warning "3. Set up HTTPS (Cloudflare Tunnel recommended)"
     else
-        error "Services failed to start. Check logs with: docker compose logs"
+        error "Services failed to start. Check logs with: sudo docker compose logs"
         exit 1
     fi
 }
@@ -259,6 +269,11 @@ main() {
     echo "3. Configure your domain DNS if using a custom domain"
     echo
     info "For more information, see: $INSTALL_DIR/docs/SETUP.md"
+    echo
+    info "Useful commands:"
+    echo "  View logs: sudo docker compose logs -f"
+    echo "  Stop services: sudo docker compose down"
+    echo "  Restart services: sudo docker compose restart"
 }
 
 # Run main function
