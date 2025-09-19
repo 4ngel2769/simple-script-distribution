@@ -322,6 +322,7 @@
                     return response.json();
                 })
                 .then(function(scripts) {
+                    console.log('Loaded scripts:', scripts); // Debug log
                     var container = document.getElementById('scriptsList');
                     container.innerHTML = '';
                     
@@ -334,11 +335,14 @@
                         var scriptDiv = document.createElement('div');
                         scriptDiv.className = 'script-item';
                         
+                        // Handle different property names and provide defaults
                         var icon = script.icon || '📜';
                         var name = script.name || 'Unnamed';
                         var description = script.description || 'No description';
                         var type = script.type || 'local';
                         var redirectInfo = '';
+                        
+                        console.log('Processing script:', script); // Debug log
                         
                         if (script.redirect_url) {
                             redirectInfo = '<p><strong>Redirects to:</strong> <a href="' + script.redirect_url + '" target="_blank" style="color: #58a6ff;">' + script.redirect_url + '</a></p>';
@@ -373,11 +377,13 @@
             document.getElementById('modalTitle').textContent = 'Add New Script';
             document.getElementById('scriptForm').reset();
             document.getElementById('scriptIcon').value = '📜';
+            document.getElementById('scriptName').disabled = false;
             toggleScriptTypeFields();
             document.getElementById('scriptModal').style.display = 'block';
         }
 
         function editScript(name) {
+            console.log('Editing script:', name); // Debug log
             fetch('/admin/scripts')
                 .then(function(response) {
                     return response.json();
@@ -391,6 +397,8 @@
                         }
                     }
                     
+                    console.log('Found script for editing:', script); // Debug log
+                    
                     if (script) {
                         editingScript = name;
                         document.getElementById('modalTitle').textContent = 'Edit Script';
@@ -403,6 +411,8 @@
                         document.getElementById('scriptPath').value = script.script_path || '';
                         toggleScriptTypeFields();
                         document.getElementById('scriptModal').style.display = 'block';
+                    } else {
+                        showStatus('Script not found', 'error');
                     }
                 })
                 .catch(function(error) {
@@ -412,10 +422,11 @@
         }
 
         function editContent(name) {
+            console.log('Editing content for:', name); // Debug log
             editingContent = name;
             document.getElementById('contentModalTitle').textContent = 'Edit Content: ' + name;
             
-            fetch('/admin/scripts/' + name + '/content')
+            fetch('/admin/scripts/' + encodeURIComponent(name) + '/content')
                 .then(function(response) {
                     return response.json();
                 })
@@ -424,29 +435,51 @@
                     document.getElementById('contentModal').style.display = 'block';
                 })
                 .catch(function(error) {
+                    console.error('Error loading script content:', error);
                     showStatus('Failed to load script content', 'error');
                 });
         }
 
         function deleteScript(name) {
+            console.log('Deleting script:', name); // Debug log
+            
+            if (!name || name === 'Unnamed') {
+                showStatus('Cannot delete script with invalid name', 'error');
+                return;
+            }
+            
             if (!confirm('Are you sure you want to delete the script "' + name + '"?')) {
                 return;
             }
 
-            fetch('/admin/scripts/' + name, {
+            fetch('/admin/scripts/' + encodeURIComponent(name), {
                 method: 'DELETE'
             })
             .then(function(response) {
+                console.log('Delete response:', response); // Debug log
                 if (response.ok) {
                     showStatus('Script deleted successfully');
                     loadScripts();
                 } else {
-                    showStatus('Failed to delete script', 'error');
+                    response.json().then(function(error) {
+                        showStatus(error.error || 'Failed to delete script', 'error');
+                    });
                 }
             })
             .catch(function(error) {
+                console.error('Delete error:', error);
                 showStatus('Failed to delete script', 'error');
             });
+        }
+
+        function openCreateModal() {
+            editingScript = null;
+            document.getElementById('modalTitle').textContent = 'Add New Script';
+            document.getElementById('scriptForm').reset();
+            document.getElementById('scriptIcon').value = '📜';
+            document.getElementById('scriptName').disabled = false;
+            toggleScriptTypeFields();
+            document.getElementById('scriptModal').style.display = 'block';
         }
 
         function toggleScriptTypeFields() {
