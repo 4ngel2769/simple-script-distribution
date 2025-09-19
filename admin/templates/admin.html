@@ -286,9 +286,9 @@
                     const scriptDiv = document.createElement('div');
                     scriptDiv.className = 'script-item';
                     scriptDiv.innerHTML = `
-                        <h3>${script.icon} ${script.name}</h3>
-                        <p>${script.description}</p>
-                        <p><strong>Type:</strong> ${script.type}</p>
+                        <h3>${script.icon || '📜'} ${script.name || 'Unnamed'}</h3>
+                        <p>${script.description || 'No description'}</p>
+                        <p><strong>Type:</strong> ${script.type || 'local'}</p>
                         ${script.redirect_url ? `<p><strong>Redirects to:</strong> ${script.redirect_url}</p>` : ''}
                         <div class="script-actions">
                             <button class="btn" onclick="editScript('${script.name}')">Edit</button>

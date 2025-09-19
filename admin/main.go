@@ -237,6 +237,8 @@ func createScriptAPI(c *fiber.Ctx) error {
 		}
 	}
 
+	updateIndexPageWithCurrentScripts()
+
 	return c.JSON(script)
 }
 
@@ -294,6 +296,7 @@ func updateScriptAPI(c *fiber.Ctx) error {
 			return c.JSON(config.Scripts[i])
 		}
 	}
+	updateIndexPageWithCurrentScripts()
 
 	return c.Status(404).JSON(fiber.Map{"error": "Script not found"})
 }
@@ -328,6 +331,7 @@ func deleteScriptAPI(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{"message": "Script deleted successfully"})
 		}
 	}
+	updateIndexPageWithCurrentScripts()
 
 	return c.Status(404).JSON(fiber.Map{"error": "Script not found"})
 }
@@ -543,11 +547,11 @@ func generateIndexHTML(scripts []ScriptConfig) string {
         <div class="usage">
             <h3><span class="emoji">📖</span>Usage Examples</h3>
             <p>Direct download:</p>
-            <p><code onclick="copyToClipboard('curl https://' + window.location.host + '/tor')">curl https://' + window.location.host + '/tor</code></p>
+            <p><code onclick="copyToClipboard(currentDomain + '/tor')">curl [domain]/tor</code></p>
             <p>Download and execute:</p>
-            <p><code onclick="copyToClipboard('curl -fsSL https://' + window.location.host + '/tor | sudo bash')">curl -fsSL https://' + window.location.host + '/tor | sudo bash</code></p>
+            <p><code onclick="copyToClipboard('curl -fsSL ' + currentDomain + '/tor | sudo bash')">curl -fsSL [domain]/tor | sudo bash</code></p>
             <p>Save to file:</p>
-            <p><code onclick="copyToClipboard('curl -o install-script.sh https://' + window.location.host + '/tor')">curl -o install-script.sh https://' + window.location.host + '/tor</code></p>
+            <p><code onclick="copyToClipboard('curl -o install-script.sh ' + currentDomain + '/tor')">curl -o install-script.sh [domain]/tor</code></p>
         </div>
         
         <div class="health">
@@ -564,7 +568,7 @@ func generateIndexHTML(scripts []ScriptConfig) string {
 
     <script>
         // Get the current domain dynamically
-        const currentDomain = window.location.origin;
+        let currentDomain = window.location.origin;
         
         // Add click listeners to all script endpoints
         document.querySelectorAll('.endpoint[data-script]').forEach(endpoint => {
@@ -634,10 +638,18 @@ func generateIndexHTML(scripts []ScriptConfig) string {
             }, 2000);
         }
 
-        // Add click listener to code examples
-        document.querySelectorAll('code[onclick]').forEach(code => {
-            code.addEventListener('click', function() {
-                showToast();
+        // Update usage examples with current domain
+        document.addEventListener('DOMContentLoaded', function() {
+            // Update the usage examples to use the current domain
+            const codeElements = document.querySelectorAll('.usage code');
+            codeElements.forEach(code => {
+                let text = code.textContent;
+                // Replace any hardcoded domains with current domain
+                text = text.replace(/https:\/\/[^\/]+/, currentDomain);
+                code.textContent = text;
+                
+                // Update onclick to use the corrected text
+                code.setAttribute('onclick', `copyToClipboard('${text}')`);
             });
         });
     </script>
@@ -730,5 +742,18 @@ func reloadCaddy() error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("Caddy reload failed: %s", resp.Status)
 	}
+	return nil
+}
+
+func updateIndexPageWithCurrentScripts() error {
+	htmlContent := generateIndexHTML(config.Scripts)
+
+	indexPath := filepath.Join(scriptsPath, "index.html")
+	if err := os.WriteFile(indexPath, []byte(htmlContent), 0644); err != nil {
+		log.Printf("Failed to auto-update index page: %v", err)
+		return err
+	}
+
+	log.Printf("Index page auto-updated with %d scripts", len(config.Scripts))
 	return nil
 }
