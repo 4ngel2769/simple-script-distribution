@@ -18,25 +18,25 @@
 		respond "OK"
 	}
 	
-	# Special case: redirect rpi_oled_setup to GitHub
-	handle /rpi_oled_setup {
-		redir https://raw.githubusercontent.com/4ngel2769/rpi_oled_stats/main/autoinstall_oled_stats.sh 302
-	}
-	
-	# Handle other script requests with clean URLs
+	# Handle script requests with clean URLs
 	@script_request {
 		path_regexp script ^/([^/]+)/?$
 	}
 	
-	# Try multiple file patterns for flexibility
+	# Try multiple file patterns and follow symlinks
 	handle @script_request {
-		try_files {re.script.1} {re.script.1}/{re.script.1}.sh {re.script.1}/runme_{re.script.1}install.sh {re.script.1}/runme_{re.script.1}.sh {re.script.1}.sh
-		
+		# Set headers first
 		header Content-Type "text/plain; charset=utf-8"
 		header Cache-Control "no-cache, must-revalidate"
 		header X-Content-Type-Options "nosniff"
 		
-		file_server
+		# Try the symlinked file first, then other patterns
+		try_files {re.script.1} {re.script.1}.sh {re.script.1}/{re.script.1}.sh {re.script.1}/runme_{re.script.1}.sh
+		
+		file_server {
+			# Follow symlinks
+			follow_symlinks
+		}
 	}
 	
 	# Root page - serve static HTML
@@ -64,5 +64,6 @@
 	log {
 		output stdout
 		format console
+		level DEBUG
 	}
 }

@@ -94,6 +94,9 @@ func main() {
 		port = "8080"
 	}
 
+	// Generate initial index page with current scripts
+	updateIndexPageWithCurrentScripts()
+
 	log.Printf("Admin dashboard starting on port %s", port)
 	log.Fatal(app.Listen(":" + port))
 }
@@ -178,126 +181,132 @@ func adminHandler(c *fiber.Ctx) error {
 }
 
 func getScriptsAPI(c *fiber.Ctx) error {
-	return c.JSON(config.Scripts)
+    log.Printf("Returning %d scripts: %+v", len(config.Scripts), config.Scripts)
+    
+    // If no scripts, return empty array
+    if config.Scripts == nil {
+        return c.JSON([]ScriptConfig{})
+    }
+    
+    return c.JSON(config.Scripts)
 }
 
 // Replace the createScriptAPI function:
 func createScriptAPI(c *fiber.Ctx) error {
-	var script ScriptConfig
-	if err := c.BodyParser(&script); err != nil {
-		log.Printf("Body parsing error: %v", err)
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
-	}
+    var script ScriptConfig
+    if err := c.BodyParser(&script); err != nil {
+        log.Printf("Body parsing error: %v", err)
+        return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+    }
 
-	log.Printf("Received script data: %+v", script)
+    log.Printf("Received script data: %+v", script)
 
-	// Validate required fields
-	if script.Name == "" || script.Description == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "Name and description are required"})
-	}
+    // Validate required fields
+    if script.Name == "" || script.Description == "" {
+        return c.Status(400).JSON(fiber.Map{"error": "Name and description are required"})
+    }
 
-	// Validate redirect URL for redirect type - BEFORE sanitizing name
-	if script.Type == "redirect" {
-		if script.RedirectURL == "" {
-			return c.Status(400).JSON(fiber.Map{"error": "Redirect URL is required for redirect type scripts"})
-		}
-		// Validate URL format
-		if !strings.HasPrefix(script.RedirectURL, "http://") && !strings.HasPrefix(script.RedirectURL, "https://") {
-			return c.Status(400).JSON(fiber.Map{"error": "Redirect URL must start with http:// or https://"})
-		}
-	}
+    // Store original name for logging
+    originalName := script.Name
 
-	// Sanitize script name (remove spaces, special chars)
-	originalName := script.Name
-	script.Name = strings.ToLower(strings.ReplaceAll(script.Name, " ", "_"))
-	script.Name = strings.ReplaceAll(script.Name, "-", "_")
-	script.Name = strings.ReplaceAll(script.Name, ".", "_")
+    // Sanitize script name for URL (but keep original description)
+    script.Name = strings.ToLower(strings.ReplaceAll(script.Name, " ", "_"))
+    script.Name = strings.ReplaceAll(script.Name, "-", "_")
+    script.Name = strings.ReplaceAll(script.Name, ".", "_")
 
-	// Check if script already exists
-	for _, existing := range config.Scripts {
-		if existing.Name == script.Name {
-			return c.Status(409).JSON(fiber.Map{
-				"error": fmt.Sprintf("Script '%s' already exists. Please choose a different name.", script.Name),
-			})
-		}
-	}
+    // Check if script already exists
+    for _, existing := range config.Scripts {
+        if existing.Name == script.Name {
+            return c.Status(409).JSON(fiber.Map{
+                "error": fmt.Sprintf("Script '%s' already exists. Please choose a different name.", script.Name),
+            })
+        }
+    }
 
-	// Set defaults
-	if script.Type == "" {
-		script.Type = "local"
-	}
-	if script.Icon == "" {
-		script.Icon = "📜"
-	}
-	if script.Path == "" {
-		script.Path = script.Name
-	}
+    // Set defaults
+    if script.Type == "" {
+        script.Type = "local"
+    }
+    if script.Icon == "" {
+        script.Icon = "📜"
+    }
+    if script.Path == "" {
+        script.Path = script.Name
+    }
 
-	// Add to config first
-	config.Scripts = append(config.Scripts, script)
-	if err := saveConfig(); err != nil {
-		log.Printf("Failed to save config: %v", err)
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to save config"})
-	}
+    // Validate based on type
+    if script.Type == "redirect" {
+        if script.RedirectURL == "" {
+            return c.Status(400).JSON(fiber.Map{"error": "Redirect URL is required for redirect type scripts"})
+        }
+        // Validate URL format
+        if !strings.HasPrefix(script.RedirectURL, "http://") && !strings.HasPrefix(script.RedirectURL, "https://") {
+            return c.Status(400).JSON(fiber.Map{"error": "Redirect URL must start with http:// or https://"})
+        }
+    }
 
-	log.Printf("Script added to config: %+v", script)
+    log.Printf("Processing script: %+v", script)
 
-	// Handle different script types
-	if script.Type == "local" {
-		symlinkPath := filepath.Join(scriptsPath, script.Name)
+    // Handle script creation based on type
+    if script.Type == "local" {
+        // Create symlink path
+        symlinkPath := filepath.Join(scriptsPath, script.Name)
 
-		if script.ScriptPath != "" {
-			// Remove existing file/symlink
-			os.Remove(symlinkPath)
+        if script.ScriptPath != "" {
+            // User selected existing file - create symlink
+            os.Remove(symlinkPath)
+            if err := os.Symlink(script.ScriptPath, symlinkPath); err != nil {
+                log.Printf("Failed to create symlink: %v", err)
+                return c.Status(500).JSON(fiber.Map{"error": "Failed to link script file"})
+            }
+            log.Printf("Created symlink: %s -> %s", symlinkPath, script.ScriptPath)
+        } else {
+            // Create new script file
+            scriptDir := filepath.Join(scriptsPath, script.Name+"_dir")
+            os.MkdirAll(scriptDir, 0755)
 
-			// Create symlink to the selected file
-			if err := os.Symlink(script.ScriptPath, symlinkPath); err != nil {
-				log.Printf("Failed to create symlink: %v", err)
-				// Don't fail the request, just log the error
-			} else {
-				log.Printf("Created symlink: %s -> %s", symlinkPath, script.ScriptPath)
-			}
-		} else {
-			// Create new script file if no path specified
-			scriptDir := filepath.Join(scriptsPath, script.Name+"_dir")
-			os.MkdirAll(scriptDir, 0755)
+            scriptFile := filepath.Join(scriptDir, script.Name+".sh")
+            defaultContent := fmt.Sprintf("#!/bin/bash\n\n# %s\n# Generated on %s\n\necho \"Hello from %s script!\"\necho \"Edit this script through the admin panel.\"\n",
+                script.Description, time.Now().Format("2006-01-02 15:04:05"), originalName)
 
-			scriptFile := filepath.Join(scriptDir, fmt.Sprintf("%s.sh", script.Name))
-			defaultContent := fmt.Sprintf("#!/bin/bash\n\n# %s\n# Generated on %s\n\necho \"Hello from %s script!\"\necho \"Edit this script through the admin panel.\"\n",
-				script.Description, time.Now().Format("2006-01-02 15:04:05"), originalName)
+            if err := os.WriteFile(scriptFile, []byte(defaultContent), 0755); err != nil {
+                return c.Status(500).JSON(fiber.Map{"error": "Failed to create script file"})
+            }
 
-			os.WriteFile(scriptFile, []byte(defaultContent), 0755)
+            // Create symlink to the new file
+            os.Remove(symlinkPath)
+            if err := os.Symlink(scriptFile, symlinkPath); err != nil {
+                log.Printf("Failed to create symlink: %v", err)
+                return c.Status(500).JSON(fiber.Map{"error": "Failed to link script file"})
+            }
 
-			// Create symlink to the new file
-			os.Remove(symlinkPath)
-			if err := os.Symlink(scriptFile, symlinkPath); err != nil {
-				log.Printf("Failed to create symlink: %v", err)
-			} else {
-				// Update the script path in config
-				for i := range config.Scripts {
-					if config.Scripts[i].Name == script.Name {
-						config.Scripts[i].ScriptPath = scriptFile
-						break
-					}
-				}
-				saveConfig()
-				log.Printf("Created new script and symlink: %s -> %s", symlinkPath, scriptFile)
-			}
-		}
-	} else if script.Type == "redirect" {
-		// Update Caddyfile for redirect
-		if err := updateCaddyfileRedirect(script.Name, script.RedirectURL); err != nil {
-			log.Printf("Failed to update Caddyfile: %v", err)
-			// Don't fail the request, just log the error
-		} else {
-			log.Printf("Added redirect for %s -> %s", script.Name, script.RedirectURL)
-		}
-	}
+            script.ScriptPath = scriptFile
+            log.Printf("Created new script and symlink: %s -> %s", symlinkPath, scriptFile)
+        }
+    } else if script.Type == "redirect" {
+        // Update Caddyfile for redirect
+        if err := updateCaddyfileRedirect(script.Name, script.RedirectURL); err != nil {
+            log.Printf("Failed to update Caddyfile: %v", err)
+            return c.Status(500).JSON(fiber.Map{"error": "Failed to configure redirect"})
+        }
+        log.Printf("Added redirect for %s -> %s", script.Name, script.RedirectURL)
+    }
 
-	// Auto-update index page
-	updateIndexPageWithCurrentScripts()
+    // Add to config AFTER successful creation
+    config.Scripts = append(config.Scripts, script)
+    if err := saveConfig(); err != nil {
+        log.Printf("Failed to save config: %v", err)
+        return c.Status(500).JSON(fiber.Map{"error": "Failed to save configuration"})
+    }
 
-	return c.JSON(script)
+    log.Printf("Script added to config successfully: %+v", script)
+
+    // Auto-update index page
+    if err := updateIndexPageWithCurrentScripts(); err != nil {
+        log.Printf("Failed to update index page: %v", err)
+    }
+
+    return c.JSON(script)
 }
 
 func updateScriptAPI(c *fiber.Ctx) error {

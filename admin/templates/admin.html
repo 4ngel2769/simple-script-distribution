@@ -326,7 +326,7 @@
                     var container = document.getElementById('scriptsList');
                     container.innerHTML = '';
                     
-                    if (scripts.length === 0) {
+                    if (!scripts || scripts.length === 0) {
                         container.innerHTML = '<p style="text-align: center; color: #8b949e;">No scripts configured yet. Click "Add New Script" to get started.</p>';
                         return;
                     }
@@ -345,21 +345,18 @@
                             redirectInfo = '<p><strong>Redirects to:</strong> <a href="' + script.redirect_url + '" target="_blank" style="color: #58a6ff;">' + script.redirect_url + '</a></p>';
                         }
                         
-                        // Only show "Edit Content" for local scripts
-                        var editContentButton = '';
+                        // Show different buttons based on type
+                        var actionButtons = '<button class="btn" onclick="editScript(\'' + name + '\')">Edit</button>';
                         if (type === 'local') {
-                            editContentButton = '<button class="btn" onclick="editContent(\'' + name + '\')">Edit Content</button>';
+                            actionButtons += '<button class="btn" onclick="editContent(\'' + name + '\')">Edit Content</button>';
                         }
+                        actionButtons += '<button class="btn btn-danger" onclick="deleteScript(\'' + name + '\')">Delete</button>';
                         
                         scriptDiv.innerHTML = '<h3>' + icon + ' ' + name + '</h3>' +
                             '<p>' + description + '</p>' +
                             '<p><strong>Type:</strong> ' + type + '</p>' +
                             redirectInfo +
-                            '<div class="script-actions">' +
-                                '<button class="btn" onclick="editScript(\'' + name + '\')">Edit</button>' +
-                                editContentButton +
-                                '<button class="btn btn-danger" onclick="deleteScript(\'' + name + '\')">Delete</button>' +
-                            '</div>';
+                            '<div class="script-actions">' + actionButtons + '</div>';
                         
                         container.appendChild(scriptDiv);
                     });
@@ -390,6 +387,7 @@
                     return response.json();
                 })
                 .then(function(scripts) {
+                    console.log('All scripts:', scripts); // Debug
                     var script = null;
                     for (var i = 0; i < scripts.length; i++) {
                         if (scripts[i].name === name) {
@@ -398,11 +396,13 @@
                         }
                     }
                     
+                    console.log('Found script:', script); // Debug
+                    
                     if (script) {
                         editingScript = name;
-                        document.getElementById('modalTitle').textContent = 'Edit Script';
+                        document.getElementById('modalTitle').textContent = 'Edit Script: ' + name;
                         document.getElementById('scriptName').value = script.name || '';
-                        document.getElementById('scriptName').disabled = true; // Don't allow name changes when editing
+                        document.getElementById('scriptName').disabled = true;
                         document.getElementById('scriptDescription').value = script.description || '';
                         document.getElementById('scriptIcon').value = script.icon || '📜';
                         document.getElementById('scriptType').value = script.type || 'local';
